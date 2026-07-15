@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: prodos-performance-dashboards
+    runtime: static
+    # Geen build-stap: het zijn kant-en-klare HTML-bestanden.
+    buildCommand: "echo geen build nodig"
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: false
+    # Voorkom dat een oude versie van de HTML uit de cache wordt getoond na een deploy.
+    # (De CSV-data zelf wordt sowieso live opgehaald met cache: no-store.)
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: "no-cache, must-revalidate"
