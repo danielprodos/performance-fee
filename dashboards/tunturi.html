@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tunturi — performance dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --accent: #2563eb;
+    --green: #16a34a;
+    --green-bg: #dcfce7;
+    --orange: #ea580c;
+    --orange-bg: #ffedd5;
+    --red: #dc2626;
+    --red-bg: #fee2e2;
+    --grid: rgba(0,0,0,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --card: #1a1d23;
+      --text: #e7e9ee;
+      --muted: #9aa1ac;
+      --border: #2a2e37;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --green-bg: #14321f;
+      --orange: #fb923c;
+      --orange-bg: #3a2410;
+      --red: #f87171;
+      --red-bg: #3a1518;
+      --grid: rgba(255,255,255,0.07);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+  header { margin-bottom: 24px; }
+  header h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; }
+  header .period { color: var(--muted); font-size: 14px; }
+  header .client-tag {
+    display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+  }
+
+  .kpis { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi .sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  /* TACOS prominent card */
+  .tacos-card { display: flex; flex-direction: column; justify-content: center; border-width: 2px; }
+  .tacos-card .label { font-size: 14px; }
+  .tacos-card .value { font-size: 44px; line-height: 1; margin: 4px 0; }
+  .tacos-card .status { font-size: 14px; font-weight: 600; margin-top: 8px; }
+  .tacos-green  { border-color: var(--green);  background: var(--green-bg); }
+  .tacos-orange { border-color: var(--orange); background: var(--orange-bg); }
+  .tacos-red    { border-color: var(--red);    background: var(--red-bg); }
+  .tacos-green .value, .tacos-green .status  { color: var(--green); }
+  .tacos-orange .value, .tacos-orange .status { color: var(--orange); }
+  .tacos-red .value, .tacos-red .status    { color: var(--red); }
+
+  /* Staffel visual */
+  .staffel { margin-bottom: 20px; }
+  .staffel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .staffel-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 640px) { .staffel-row { grid-template-columns: repeat(2, 1fr); } }
+  .seg {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center;
+    background: var(--card); position: relative; transition: transform .1s;
+  }
+  .seg .range { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .seg .fee { font-size: 20px; font-weight: 700; }
+  .seg .now { font-size: 12px; font-weight: 700; margin-top: 6px; display: none; }
+  .seg.active { border-width: 2px; }
+  .seg.active .now { display: block; }
+  .seg.active-green { border-color: var(--green); background: var(--green-bg); }
+  .seg.active-green .now { color: var(--green); }
+  .seg.active-red { border-color: var(--red); background: var(--red-bg); }
+  .seg.active-red .now { color: var(--red); }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .chart-box { position: relative; height: 320px; }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+
+  .banner {
+    padding: 16px 20px; border-radius: 12px; margin-bottom: 20px; font-size: 14px;
+    border: 1px solid var(--red); background: var(--red-bg); color: var(--red); display: none;
+  }
+  .banner.show { display: block; }
+  .loading { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===================== CONFIG per klant ===================== -->
+  <!-- Nieuw klant-dashboard = dit bestand kopiëren en alleen dit blok aanpassen. -->
+  <script>
+    const CONFIG = {
+      klant: "Tunturi",
+      csvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQFTpm2oz97EGlO8WKhhAY8VA2V9IjPk6F82LJ8_ly0RD-l6jJpudnMktnOh8xLo0PFO09Irhdtj9c/pub?output=csv",
+      // Staffel: fee-percentage over omzet ex btw o.b.v. TACOS (%).
+      // maxTacos is exclusief (< grens). Volgorde: laag naar hoog.
+      staffel: [
+        { maxTacos: 4,        fee: 0.035,  labelRange: "0–4%" },
+        { maxTacos: 5,        fee: 0.025,  labelRange: "4–5%" },
+        { maxTacos: 6,        fee: 0.0175, labelRange: "5–6%" },
+        { maxTacos: 7,        fee: 0.01,   labelRange: "6–7%" },
+        { maxTacos: Infinity, fee: 0,      labelRange: "≥7%" }
+      ]
+    };
+  </script>
+  <!-- =========================================================== -->
+
+  <header>
+    <div class="client-tag">Prodos · performance dashboard</div>
+    <h1 id="title">— performance dashboard</h1>
+    <div class="period" id="period">Data wordt geladen…</div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div id="content" style="display:none;">
+    <div class="kpis">
+      <div class="card kpi tacos-card" id="tacosCard">
+        <div class="label">TACOS (totaal)</div>
+        <div class="value" id="tacosValue">—</div>
+        <div class="status" id="tacosStatus">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Netto inkomsten (ex btw)</div>
+        <div class="value" id="revValue">—</div>
+        <div class="sub" id="revSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Ad-kosten totaal</div>
+        <div class="value" id="costValue">—</div>
+        <div class="sub" id="costSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Performance fee</div>
+        <div class="value" id="feeValue">—</div>
+        <div class="sub" id="feeSub">—</div>
+      </div>
+    </div>
+
+    <div class="card staffel">
+      <h2>Performance fee-staffel</h2>
+      <div class="staffel-row" id="staffelRow"></div>
+    </div>
+
+    <div class="charts">
+      <div class="card chart-card">
+        <h2>Cumulatieve TACOS per dag</h2>
+        <div class="chart-box"><canvas id="tacosChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Netto inkomsten &amp; ad-kosten per dag</h2>
+        <div class="chart-box"><canvas id="dailyChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+// ---------- Formatters (NL) ----------
+const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
+const pct1 = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtEuro = (n) => euro.format(n || 0);
+const fmtPct = (n) => pct1.format(n) + '%';
+
+// ---------- CSV parsing ----------
+// Splitst een CSV-regel met respect voor quotes.
+function splitCsvLine(line) {
+  const out = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      out.push(cur); cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+// NL-bedrag "€1.298,29" -> 1298.29
+function parseBedrag(raw) {
+  if (raw == null) return 0;
+  let s = String(raw).trim();
+  if (s === '') return 0;
+  s = s.replace(/€/g, '').replace(/\s/g, '').replace(/\./g, '').replace(/,/g, '.');
+  s = s.replace(/[^0-9.\-]/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// Geldige datum YYYY-MM-DD?
+function parseDatum(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return s;
+}
+
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) { // sla header over
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[0]);
+    if (!datum) continue; // sla instructie-/lege regels over
+    rows.push({
+      datum,
+      meta: parseBedrag(cols[1]),
+      google: parseBedrag(cols[2]),
+      netto: parseBedrag(cols[3])
+    });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return rows;
+}
+
+// ---------- Staffel ----------
+function feeVoorTacos(tacosPct) {
+  for (const tred of CONFIG.staffel) {
+    if (tacosPct < tred.maxTacos) return tred;
+  }
+  return CONFIG.staffel[CONFIG.staffel.length - 1];
+}
+
+// ---------- Rendering ----------
+function toonFout(msg) {
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.classList.add('show');
+  document.getElementById('period').textContent = '';
+}
+
+function fmtDatumNL(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+
+function isDark() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function render(rows) {
+  document.getElementById('title').textContent = `${CONFIG.klant} — performance dashboard`;
+
+  if (rows.length === 0) {
+    toonFout('Geen geldige datarijen gevonden in de sheet.');
+    return;
+  }
+
+  document.getElementById('content').style.display = 'block';
+
+  const totMeta = rows.reduce((s, r) => s + r.meta, 0);
+  const totGoogle = rows.reduce((s, r) => s + r.google, 0);
+  const totKosten = totMeta + totGoogle;
+  const totNetto = rows.reduce((s, r) => s + r.netto, 0);
+
+  const eerste = rows[0].datum, laatste = rows[rows.length - 1].datum;
+  document.getElementById('period').textContent =
+    `Periode: ${fmtDatumNL(eerste)} t/m ${fmtDatumNL(laatste)} · ${rows.length} dagen`;
+
+  // TACOS
+  const heeftOmzet = totNetto > 0;
+  const tacos = heeftOmzet ? (totKosten / totNetto) * 100 : null;
+
+  const tacosCard = document.getElementById('tacosCard');
+  const tacosValue = document.getElementById('tacosValue');
+  const tacosStatus = document.getElementById('tacosStatus');
+  tacosCard.classList.remove('tacos-green', 'tacos-orange', 'tacos-red');
+
+  let tred = null;
+  if (!heeftOmzet) {
+    tacosValue.textContent = 'n.v.t.';
+    tacosStatus.textContent = 'Geen omzet — TACOS niet te berekenen';
+    tacosCard.classList.add('tacos-orange');
+  } else {
+    tacosValue.textContent = fmtPct(tacos);
+    tred = feeVoorTacos(tacos);
+    if (tacos < 4) {
+      tacosCard.classList.add('tacos-green');
+      tacosStatus.textContent = `Onder 4% — fee ${fmtPct(tred.fee * 100)} over omzet`;
+    } else if (tacos < 7) {
+      tacosCard.classList.add('tacos-orange');
+      tacosStatus.textContent = `Tussen 4% en 7% — fee ${fmtPct(tred.fee * 100)} over omzet`;
+    } else {
+      tacosCard.classList.add('tacos-red');
+      tacosStatus.textContent = 'Boven 7% — geen performance fee';
+    }
+  }
+
+  // Overige KPI's
+  const gemPerDag = totNetto / rows.length;
+  document.getElementById('revValue').textContent = fmtEuro(totNetto);
+  document.getElementById('revSub').textContent = `Gemiddeld ${fmtEuro(gemPerDag)} per dag`;
+
+  document.getElementById('costValue').textContent = fmtEuro(totKosten);
+  document.getElementById('costSub').textContent =
+    `Meta ${fmtEuro(totMeta)} · Google ${fmtEuro(totGoogle)}`;
+
+  const feePct = tred ? tred.fee : 0;
+  const feeBedrag = heeftOmzet ? feePct * totNetto : 0;
+  document.getElementById('feeValue').textContent = fmtEuro(feeBedrag);
+  document.getElementById('feeSub').textContent = heeftOmzet
+    ? `Actief fee-% : ${fmtPct(feePct * 100)}`
+    : 'Geen omzet';
+
+  renderStaffel(tred);
+  renderTacosChart(rows);
+  renderDailyChart(rows);
+}
+
+function renderStaffel(activeTred) {
+  const row = document.getElementById('staffelRow');
+  row.innerHTML = '';
+  CONFIG.staffel.forEach((tred) => {
+    const div = document.createElement('div');
+    div.className = 'seg';
+    const isActive = activeTred && tred === activeTred;
+    if (isActive) {
+      div.classList.add('active');
+      div.classList.add(tred.fee > 0 ? 'active-green' : 'active-red');
+    }
+    div.innerHTML = `
+      <div class="range">${tred.labelRange}</div>
+      <div class="fee">${fmtPct(tred.fee * 100)}</div>
+      <div class="now">← nu</div>`;
+    row.appendChild(div);
+  });
+}
+
+let tacosChartObj = null, dailyChartObj = null;
+
+function chartColors() {
+  return {
+    text: getComputedStyle(document.body).getPropertyValue('--text').trim() || '#1a1d21',
+    grid: getComputedStyle(document.body).getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.06)'
+  };
+}
+
+function renderTacosChart(rows) {
+  const c = chartColors();
+  const labels = rows.map(r => fmtDatumNL(r.datum));
+  let cumKost = 0, cumNetto = 0;
+  const cumTacos = rows.map(r => {
+    cumKost += r.meta + r.google;
+    cumNetto += r.netto;
+    return cumNetto > 0 ? (cumKost / cumNetto) * 100 : null;
+  });
+
+  if (tacosChartObj) tacosChartObj.destroy();
+  tacosChartObj = new Chart(document.getElementById('tacosChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Cumulatieve TACOS',
+          data: cumTacos,
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,0.1)',
+          borderWidth: 2, tension: 0.25, fill: true, pointRadius: 2, spanGaps: true
+        },
+        {
+          label: '7%-grens',
+          data: labels.map(() => 7),
+          borderColor: '#dc2626',
+          borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? '—' : fmtPct(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, callback: (v) => v + '%' }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderDailyChart(rows) {
+  const c = chartColors();
+  const labels = rows.map(r => fmtDatumNL(r.datum));
+  if (dailyChartObj) dailyChartObj.destroy();
+  dailyChartObj = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Netto inkomsten',
+          data: rows.map(r => r.netto),
+          backgroundColor: '#16a34a', borderRadius: 4
+        },
+        {
+          label: 'Ad-kosten',
+          data: rows.map(r => r.meta + r.google),
+          backgroundColor: '#ea580c', borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, callback: (v) => euro.format(v).replace(/,00$/, '') }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ---------- Data laden ----------
+async function laadData() {
+  try {
+    const res = await fetch(CONFIG.csvUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const rows = parseCsv(text);
+    render(rows);
+    const nu = new Date();
+    document.getElementById('footer').textContent =
+      'Laatst bijgewerkt: ' + nu.toLocaleString('nl-NL');
+  } catch (err) {
+    console.error(err);
+    toonFout('Kon de data niet ophalen — controleer of de sheet gepubliceerd is en de link klopt.');
+    document.getElementById('footer').textContent =
+      'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
+  }
+}
+
+laadData();
+</script>
+</body>
+</html>
