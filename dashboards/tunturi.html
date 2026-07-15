@@ -21,9 +21,14 @@
     --red: #dc2626;
     --red-bg: #fee2e2;
     --grid: rgba(0,0,0,0.06);
+    /* Prodos merkkleuren — pas hier aan als de exacte hex net anders is */
+    --prodos-blue: #234B96;
+    --prodos-green: #2EE86F;
   }
+  /* Donker thema: automatisch bij systeemvoorkeur (tenzij handmatig 'licht' gekozen),
+     of expliciet via de thema-schakelaar (data-theme="dark"). */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #0f1115;
       --card: #1a1d23;
       --text: #e7e9ee;
@@ -40,6 +45,22 @@
       --grid: rgba(255,255,255,0.07);
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --card: #1a1d23;
+    --text: #e7e9ee;
+    --muted: #9aa1ac;
+    --border: #2a2e37;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --green-bg: #14321f;
+    --orange: #fb923c;
+    --orange-bg: #3a2410;
+    --red: #f87171;
+    --red-bg: #3a1518;
+    --grid: rgba(255,255,255,0.07);
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -51,8 +72,19 @@
   }
   .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
   header { margin-bottom: 24px; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
   header h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; }
   header .period { color: var(--muted); font-size: 14px; }
+  .theme-switch {
+    display: inline-flex; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; box-shadow: var(--shadow); flex-shrink: 0;
+  }
+  .theme-switch button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+    font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button.active { background: var(--accent); color: #fff; }
   header .client-tag {
     display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
@@ -138,9 +170,18 @@
   <!-- =========================================================== -->
 
   <header>
-    <div class="client-tag">Prodos · performance dashboard</div>
-    <h1 id="title">— performance dashboard</h1>
-    <div class="period" id="period">Data wordt geladen…</div>
+    <div class="head-row">
+      <div>
+        <div class="client-tag">Prodos · performance dashboard</div>
+        <h1 id="title">— performance dashboard</h1>
+        <div class="period" id="period">Data wordt geladen…</div>
+      </div>
+      <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
+        <button type="button" data-theme-choice="system">Systeem</button>
+        <button type="button" data-theme-choice="light">Licht</button>
+        <button type="button" data-theme-choice="dark">Donker</button>
+      </div>
+    </div>
   </header>
 
   <div class="banner" id="banner"></div>
@@ -280,7 +321,10 @@ function isDark() {
   return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
+let lastRows = null;
+
 function render(rows) {
+  lastRows = rows;
   document.getElementById('title').textContent = `${CONFIG.klant} — performance dashboard`;
 
   if (rows.length === 0) {
@@ -370,10 +414,21 @@ function renderStaffel(activeTred) {
 
 let tacosChartObj = null, dailyChartObj = null;
 
+function withAlpha(hex, a) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 function chartColors() {
+  const s = getComputedStyle(document.body);
   return {
-    text: getComputedStyle(document.body).getPropertyValue('--text').trim() || '#1a1d21',
-    grid: getComputedStyle(document.body).getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.06)'
+    text: s.getPropertyValue('--text').trim() || '#1a1d21',
+    grid: s.getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.06)',
+    blue: s.getPropertyValue('--prodos-blue').trim() || '#234B96',
+    green: s.getPropertyValue('--prodos-green').trim() || '#2EE86F'
   };
 }
 
@@ -396,8 +451,8 @@ function renderTacosChart(rows) {
         {
           label: 'Cumulatieve TACOS',
           data: cumTacos,
-          borderColor: '#2563eb',
-          backgroundColor: 'rgba(37,99,235,0.1)',
+          borderColor: c.blue,
+          backgroundColor: withAlpha(c.blue, 0.12),
           borderWidth: 2, tension: 0.25, fill: true, pointRadius: 2, spanGaps: true
         },
         {
@@ -434,12 +489,12 @@ function renderDailyChart(rows) {
         {
           label: 'Netto inkomsten',
           data: rows.map(r => r.netto),
-          backgroundColor: '#16a34a', borderRadius: 4
+          backgroundColor: c.blue, borderRadius: 4
         },
         {
           label: 'Ad-kosten',
           data: rows.map(r => r.meta + r.google),
-          backgroundColor: '#ea580c', borderRadius: 4
+          backgroundColor: c.green, borderRadius: 4
         }
       ]
     },
@@ -475,6 +530,42 @@ async function laadData() {
       'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
   }
 }
+
+// ---------- Thema-schakelaar (Systeem / Licht / Donker) ----------
+const THEME_KEY = 'prodos-theme';
+
+function redrawCharts() {
+  if (lastRows && lastRows.length) {
+    renderTacosChart(lastRows);
+    renderDailyChart(lastRows);
+  }
+}
+
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'light' || choice === 'dark') root.setAttribute('data-theme', choice);
+  else root.removeAttribute('data-theme'); // 'system'
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.classList.toggle('active', b.dataset.themeChoice === choice));
+  redrawCharts();
+}
+
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  const choice = saved || 'system';
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.addEventListener('click', () => {
+      const c = b.dataset.themeChoice;
+      try { localStorage.setItem(THEME_KEY, c); } catch (e) {}
+      applyTheme(c);
+    }));
+  applyTheme(choice);
+  // In systeemmodus: hertekenen als de OS-voorkeur wisselt (kleuren volgen mee).
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!document.documentElement.hasAttribute('data-theme')) redrawCharts();
+  });
+})();
 
 laadData();
 </script>
