@@ -156,6 +156,9 @@
     const CONFIG = {
       klant: "Fitnessdelivery",
       csvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOUYJZNgGwb6OkXEBPKxpxM270ZZhVxg0r2cY0svDXmm_Qa_0RVpn-pI_0CNDa0pu3HGbESZx0MQuD/pub?output=csv",
+      // Omzet in de sheet is bruto (incl. btw). Wordt gedeeld door (1 + btwTarief)
+      // om de netto omzet (ex btw) te krijgen waarover alles wordt berekend.
+      btwTarief: 0.21,
       // Staffel: fee-percentage over omzet ex btw o.b.v. TACOS (%).
       // maxTacos is exclusief (< grens). Volgorde: laag naar hoog.
       // Let op: TACOS wordt hier berekend ná aftrek van 'Kosten locale campagnes'.
@@ -305,6 +308,8 @@ function parseCsv(text) {
   const iNetto = idx(KOLOMMEN.netto);
   heeftLocaleKolom = iLocale !== -1;
   const kolomDatum = iDatum === -1 ? 0 : iDatum; // fallback: eerste kolom
+  // Omzet in de sheet is bruto (incl. btw) -> delen door (1 + btwTarief) = netto ex btw.
+  const btwTarief = (typeof CONFIG !== 'undefined' && CONFIG.btwTarief != null) ? CONFIG.btwTarief : 0.21;
 
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -317,7 +322,7 @@ function parseCsv(text) {
       meta: parseBedrag(cols[iMeta]),
       google: parseBedrag(cols[iGoogle]),
       locale: iLocale === -1 ? 0 : parseBedrag(cols[iLocale]),
-      netto: parseBedrag(cols[iNetto])
+      netto: parseBedrag(cols[iNetto]) / (1 + btwTarief)
     });
   }
   rows.sort((a, b) => a.datum.localeCompare(b.datum));
