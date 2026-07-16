@@ -156,9 +156,9 @@
     const CONFIG = {
       klant: "Tunturi",
       csvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQFTpm2oz97EGlO8WKhhAY8VA2V9IjPk6F82LJ8_ly0RD-l6jJpudnMktnOh8xLo0PFO09Irhdtj9c/pub?output=csv",
-      // Omzet in de sheet is bruto (incl. btw). Wordt gedeeld door (1 + btwTarief)
-      // om de netto omzet (ex btw) te krijgen waarover alles wordt berekend.
-      btwTarief: 0.21,
+      // Omzet in deze sheet staat al netto (ex btw) -> geen btw-correctie nodig.
+      // (Zet op 0.21 als een klant de bruto omzet incl. btw aanlevert.)
+      btwTarief: 0,
       // Staffel: fee-percentage over omzet ex btw o.b.v. TACOS (%).
       // maxTacos is exclusief (< grens). Volgorde: laag naar hoog.
       staffel: [
