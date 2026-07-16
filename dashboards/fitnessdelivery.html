@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Tunturi — performance dashboard</title>
+<title>Fitnessdelivery — performance dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -154,16 +154,17 @@
   <!-- Nieuw klant-dashboard = dit bestand kopiëren en alleen dit blok aanpassen. -->
   <script>
     const CONFIG = {
-      klant: "Tunturi",
-      csvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQFTpm2oz97EGlO8WKhhAY8VA2V9IjPk6F82LJ8_ly0RD-l6jJpudnMktnOh8xLo0PFO09Irhdtj9c/pub?output=csv",
+      klant: "Fitnessdelivery",
+      csvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOUYJZNgGwb6OkXEBPKxpxM270ZZhVxg0r2cY0svDXmm_Qa_0RVpn-pI_0CNDa0pu3HGbESZx0MQuD/pub?output=csv",
       // Staffel: fee-percentage over omzet ex btw o.b.v. TACOS (%).
       // maxTacos is exclusief (< grens). Volgorde: laag naar hoog.
+      // Let op: TACOS wordt hier berekend ná aftrek van 'Kosten locale campagnes'.
       staffel: [
-        { maxTacos: 4,        fee: 0.035,  labelRange: "0–4%" },
-        { maxTacos: 5,        fee: 0.025,  labelRange: "4–5%" },
-        { maxTacos: 6,        fee: 0.0175, labelRange: "5–6%" },
-        { maxTacos: 7,        fee: 0.01,   labelRange: "6–7%" },
-        { maxTacos: Infinity, fee: 0,      labelRange: "≥7%" }
+        { maxTacos: 7,        fee: 0.04,  labelRange: "0–7%" },
+        { maxTacos: 10,       fee: 0.03,  labelRange: "7–10%" },
+        { maxTacos: 12,       fee: 0.025, labelRange: "10–12%" },
+        { maxTacos: 15,       fee: 0.02,  labelRange: "12–15%" },
+        { maxTacos: Infinity, fee: 0,     labelRange: "≥15%" }
       ]
     };
   </script>
