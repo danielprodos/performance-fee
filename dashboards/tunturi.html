@@ -286,10 +286,12 @@ const KOLOMMEN = {
   datum: 'Datum',
   meta: 'Meta Ads kosten',
   google: 'Google Ads kosten',
-  locale: 'Kosten locale campagnes', // optioneel
+  microsoft: 'Microsoft Ads Kosten', // optioneel; telt mee in de ad-kosten
+  locale: 'Kosten locale campagnes', // optioneel; wordt afgetrokken
   netto: 'Netto inkomsten (ex btw)'
 };
 let heeftLocaleKolom = false;
+let heeftMicrosoftKolom = false;
 
 function normHeader(s) {
   return String(s == null ? '' : s).replace(/^﻿/, '').trim().toLowerCase();
@@ -303,9 +305,11 @@ function parseCsv(text) {
   const iDatum = idx(KOLOMMEN.datum);
   const iMeta = idx(KOLOMMEN.meta);
   const iGoogle = idx(KOLOMMEN.google);
+  const iMicrosoft = idx(KOLOMMEN.microsoft);
   const iLocale = idx(KOLOMMEN.locale);
   const iNetto = idx(KOLOMMEN.netto);
   heeftLocaleKolom = iLocale !== -1;
+  heeftMicrosoftKolom = iMicrosoft !== -1;
   const kolomDatum = iDatum === -1 ? 0 : iDatum; // fallback: eerste kolom
   // Omzet in de sheet is bruto (incl. btw) -> delen door (1 + btwTarief) = netto ex btw.
   const btwTarief = (typeof CONFIG !== 'undefined' && CONFIG.btwTarief != null) ? CONFIG.btwTarief : 0.21;
@@ -320,6 +324,7 @@ function parseCsv(text) {
       datum,
       meta: parseBedrag(cols[iMeta]),
       google: parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft]),
       locale: iLocale === -1 ? 0 : parseBedrag(cols[iLocale]),
       netto: parseBedrag(cols[iNetto]) / (1 + btwTarief)
     });
@@ -375,8 +380,9 @@ function render(rows) {
 
   const totMeta = rows.reduce((s, r) => s + r.meta, 0);
   const totGoogle = rows.reduce((s, r) => s + r.google, 0);
+  const totMicrosoft = rows.reduce((s, r) => s + (r.microsoft || 0), 0);
   const totLocale = rows.reduce((s, r) => s + (r.locale || 0), 0);
-  const brutoKosten = totMeta + totGoogle;
+  const brutoKosten = totMeta + totGoogle + totMicrosoft;
   const effKosten = brutoKosten - totLocale; // locale campagnes eraf
   const totNetto = rows.reduce((s, r) => s + r.netto, 0);
 
@@ -424,9 +430,10 @@ function render(rows) {
   document.getElementById('costLabel').textContent =
     heeftLocaleKolom ? 'Ad-kosten (na aftrek locale)' : 'Ad-kosten totaal';
   document.getElementById('costValue').textContent = fmtEuro(effKosten);
-  document.getElementById('costSub').innerHTML = heeftLocaleKolom
-    ? `Meta ${fmtEuro(totMeta)} · Google ${fmtEuro(totGoogle)}<br>Locale campagnes −${fmtEuro(totLocale)} afgetrokken`
-    : `Meta ${fmtEuro(totMeta)} · Google ${fmtEuro(totGoogle)}`;
+  let kostenSub = `Meta ${fmtEuro(totMeta)} · Google ${fmtEuro(totGoogle)}`;
+  if (heeftMicrosoftKolom) kostenSub += ` · Microsoft ${fmtEuro(totMicrosoft)}`;
+  if (heeftLocaleKolom) kostenSub += `<br>Locale campagnes −${fmtEuro(totLocale)} afgetrokken`;
+  document.getElementById('costSub').innerHTML = kostenSub;
 
   const feePct = tred ? tred.fee : 0;
   const feeBedrag = heeftOmzet ? feePct * totNetto : 0;
@@ -484,7 +491,7 @@ function renderTacosChart(rows) {
   const labels = rows.map(r => fmtDatumNL(r.datum));
   let cumKost = 0, cumNetto = 0;
   const cumTacos = rows.map(r => {
-    cumKost += r.meta + r.google - (r.locale || 0); // effectieve kosten
+    cumKost += r.meta + r.google + (r.microsoft || 0) - (r.locale || 0); // effectieve kosten
     cumNetto += r.netto;
     return cumNetto > 0 ? (cumKost / cumNetto) * 100 : null;
   });
@@ -543,7 +550,7 @@ function renderDailyChart(rows) {
         },
         {
           label: 'Ad-kosten',
-          data: rows.map(r => r.meta + r.google - (r.locale || 0)),
+          data: rows.map(r => r.meta + r.google + (r.microsoft || 0) - (r.locale || 0)),
           backgroundColor: c.green, borderRadius: 4
         }
       ]
