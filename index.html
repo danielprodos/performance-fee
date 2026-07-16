@@ -3,21 +3,247 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Prodos performance dashboards</title>
-<!-- Tijdelijke startpagina: verwijst door naar het Tunturi-dashboard.
-     Wordt later vervangen door een overzichtspagina met alle klant-dashboards. -->
-<meta http-equiv="refresh" content="0; url=dashboards/tunturi.html" />
+<title>Prodos — consultant overzicht</title>
+<script src="metrics.js"></script>
+<script src="clients.js"></script>
 <style>
-  body {
-    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #0f1115; color: #e7e9ee;
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --accent: #2563eb;
+    --red: #dc2626;
+    --red-bg: #fee2e2;
+    --prodos-blue: #234B96;
+    --prodos-green: #2EE86F;
+    --fee-accent: #234B96; /* fee-kleur: blauw in licht thema */
   }
-  a { color: #2EE86F; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac;
+      --border: #2a2e37; --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6;
+      --red: #f87171; --red-bg: #3a1518; --fee-accent: #2EE86F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac;
+    --border: #2a2e37; --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6;
+    --red: #f87171; --red-bg: #3a1518; --fee-accent: #2EE86F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+  header { margin-bottom: 24px; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .brand-tag {
+    display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  .theme-switch {
+    display: inline-flex; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; box-shadow: var(--shadow); flex-shrink: 0;
+  }
+  .theme-switch button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+    font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button.active { background: var(--accent); color: #fff; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+
+  /* Totalen-balk */
+  .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 620px) { .totals { grid-template-columns: 1fr; } }
+  .totals .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .totals .value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .totals .fee .value { color: var(--fee-accent); }
+
+  h2.section { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+
+  /* Klantenlijst */
+  .klant-list { display: flex; flex-direction: column; gap: 12px; }
+  .klant-card {
+    display: grid; grid-template-columns: 44px 1.5fr 1fr 1fr 1.1fr; gap: 16px; align-items: center;
+    text-decoration: none; color: inherit;
+    transition: border-color .12s, transform .12s;
+  }
+  .klant-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .rank {
+    width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+  }
+  .klant-card:first-child .rank { background: var(--prodos-blue); color: #fff; border-color: var(--prodos-blue); }
+  .naam-blok .naam { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .klant-card:hover .naam-blok .naam { color: var(--accent); }
+  .naam-blok .periode { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .metric .m-label { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+  .metric .m-value { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .metric.fee .m-value { color: var(--fee-accent); font-size: 19px; }
+  .err { color: var(--red); font-size: 13px; }
+
+  @media (max-width: 720px) {
+    .klant-card { grid-template-columns: 36px 1fr; row-gap: 12px; }
+    .metrics-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  }
+  @media (min-width: 721px) { .metrics-row { display: contents; } }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  .loading { color: var(--muted); font-size: 14px; padding: 20px 0; }
 </style>
 </head>
 <body>
-  <p>Bezig met doorverwijzen naar het dashboard… <a href="dashboards/tunturi.html">Klik hier als er niets gebeurt.</a></p>
-  <script>location.replace('dashboards/tunturi.html');</script>
+<div class="wrap">
+  <header>
+    <div class="head-row">
+      <div>
+        <div class="brand-tag">Prodos</div>
+        <h1>Consultant overzicht</h1>
+        <div class="sub">Alle klanten · gesorteerd op performance fee (hoog → laag)</div>
+      </div>
+      <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
+        <button type="button" data-theme-choice="system">Systeem</button>
+        <button type="button" data-theme-choice="light">Licht</button>
+        <button type="button" data-theme-choice="dark">Donker</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="totals" id="totals" style="display:none;">
+    <div class="card"><div class="label">Netto inkomsten (totaal)</div><div class="value" id="totNetto">—</div></div>
+    <div class="card"><div class="label">Ad-kosten (totaal)</div><div class="value" id="totKosten">—</div></div>
+    <div class="card fee"><div class="label">Performance fee (totaal)</div><div class="value" id="totFee">—</div></div>
+  </div>
+
+  <h2 class="section">Klanten</h2>
+  <div class="loading" id="loading">Klantdata wordt geladen…</div>
+  <div class="klant-list" id="klantList"></div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+// Parsing/berekeningen/formatters komen uit metrics.js; klantenlijst uit clients.js.
+
+async function laadKlant(client) {
+  try {
+    const res = await fetch(client.csvUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const { rows } = parseSheet(text, client);
+    if (!rows.length) throw new Error('geen datarijen');
+    return { client, m: computeMetrics(rows, client), ok: true };
+  } catch (e) {
+    console.error('Klant laden mislukt:', client.naam, e);
+    return { client, ok: false };
+  }
+}
+
+function metricBlok(label, value, klasse) {
+  return `<div class="metric ${klasse || ''}"><div class="m-label">${label}</div><div class="m-value">${value}</div></div>`;
+}
+
+function render(results) {
+  document.getElementById('loading').style.display = 'none';
+  const lijst = document.getElementById('klantList');
+  lijst.innerHTML = '';
+
+  let sNetto = 0, sKosten = 0, sFee = 0;
+
+  results.forEach((res, i) => {
+    const c = res.client;
+    const a = document.createElement('a');
+    a.className = 'klant-card card';
+    a.href = c.dashboard;
+
+    let rechts;
+    if (res.ok) {
+      const m = res.m;
+      sNetto += m.totNetto; sKosten += m.effKosten; sFee += m.feeBedrag;
+      const periode = m.eerste
+        ? `${fmtDatumNL(m.eerste)} – ${fmtDatumNL(m.laatste)} · ${m.aantalDagen} dagen`
+        : '—';
+      rechts = `
+        <div class="naam-blok">
+          <div class="naam">${c.naam}</div>
+          <div class="periode">${periode}</div>
+        </div>
+        <div class="metrics-row">
+          ${metricBlok('Netto inkomsten', fmtEuro(m.totNetto))}
+          ${metricBlok('Ad-kosten', fmtEuro(m.effKosten))}
+          ${metricBlok('Performance fee', fmtEuro(m.feeBedrag), 'fee')}
+        </div>`;
+    } else {
+      rechts = `
+        <div class="naam-blok">
+          <div class="naam">${c.naam}</div>
+          <div class="periode err">Kon data niet ophalen</div>
+        </div>
+        <div class="metrics-row">
+          ${metricBlok('Netto inkomsten', '—')}
+          ${metricBlok('Ad-kosten', '—')}
+          ${metricBlok('Performance fee', '—', 'fee')}
+        </div>`;
+    }
+
+    a.innerHTML = `<div class="rank">${i + 1}</div>${rechts}`;
+    lijst.appendChild(a);
+  });
+
+  document.getElementById('totNetto').textContent = fmtEuro(sNetto);
+  document.getElementById('totKosten').textContent = fmtEuro(sKosten);
+  document.getElementById('totFee').textContent = fmtEuro(sFee);
+  document.getElementById('totals').style.display = 'grid';
+
+  document.getElementById('footer').textContent =
+    'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
+}
+
+async function init() {
+  const results = await Promise.all(CLIENTS.map(laadKlant));
+  // Sorteer op performance fee (hoog -> laag); klanten zonder data onderaan.
+  results.sort((a, b) => {
+    if (a.ok && b.ok) return b.m.feeBedrag - a.m.feeBedrag;
+    return (a.ok ? 0 : 1) - (b.ok ? 0 : 1);
+  });
+  render(results);
+}
+
+// ---------- Thema-schakelaar ----------
+const THEME_KEY = 'prodos-theme';
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'light' || choice === 'dark') root.setAttribute('data-theme', choice);
+  else root.removeAttribute('data-theme');
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.classList.toggle('active', b.dataset.themeChoice === choice));
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  const choice = saved || 'system';
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.addEventListener('click', () => {
+      const c = b.dataset.themeChoice;
+      try { localStorage.setItem(THEME_KEY, c); } catch (e) {}
+      applyTheme(c);
+    }));
+  applyTheme(choice);
+})();
+
+init();
+</script>
 </body>
 </html>

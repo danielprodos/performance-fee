@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fitnessdelivery — performance dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../metrics.js"></script>
+<script src="../clients.js"></script>
 <style>
   :root {
     --bg: #f4f5f7;
@@ -89,6 +91,8 @@
     display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
   }
+  header .client-tag a { color: inherit; text-decoration: none; }
+  header .client-tag a:hover { color: var(--accent); }
 
   .kpis { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
   @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
@@ -150,33 +154,18 @@
 </head>
 <body>
 <div class="wrap">
-  <!-- ===================== CONFIG per klant ===================== -->
-  <!-- Nieuw klant-dashboard = dit bestand kopiëren en alleen dit blok aanpassen. -->
+  <!-- ===================== KLANT ===================== -->
+  <!-- Config komt uit ../clients.js. Nieuw dashboard = dit bestand kopiëren
+       en alleen de id hieronder + de <title> aanpassen. -->
   <script>
-    const CONFIG = {
-      klant: "Fitnessdelivery",
-      csvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOUYJZNgGwb6OkXEBPKxpxM270ZZhVxg0r2cY0svDXmm_Qa_0RVpn-pI_0CNDa0pu3HGbESZx0MQuD/pub?output=csv",
-      // Omzet in de sheet is bruto (incl. btw). Wordt gedeeld door (1 + btwTarief)
-      // om de netto omzet (ex btw) te krijgen waarover alles wordt berekend.
-      btwTarief: 0.21,
-      // Staffel: fee-percentage over omzet ex btw o.b.v. TACOS (%).
-      // maxTacos is exclusief (< grens). Volgorde: laag naar hoog.
-      // Let op: TACOS wordt hier berekend ná aftrek van 'Kosten locale campagnes'.
-      staffel: [
-        { maxTacos: 7,        fee: 0.04,  labelRange: "0–7%" },
-        { maxTacos: 10,       fee: 0.03,  labelRange: "7–10%" },
-        { maxTacos: 12,       fee: 0.025, labelRange: "10–12%" },
-        { maxTacos: 15,       fee: 0.02,  labelRange: "12–15%" },
-        { maxTacos: Infinity, fee: 0,     labelRange: "≥15%" }
-      ]
-    };
+    const CONFIG = CLIENTS.find(c => c.id === 'fitnessdelivery');
   </script>
-  <!-- =========================================================== -->
+  <!-- ================================================= -->
 
   <header>
     <div class="head-row">
       <div>
-        <div class="client-tag">Prodos · performance dashboard</div>
+        <div class="client-tag"><a href="../index.html">← Prodos · consultant overzicht</a></div>
         <h1 id="title">— performance dashboard</h1>
         <div class="period" id="period">Data wordt geladen…</div>
       </div>
@@ -235,121 +224,8 @@
 </div>
 
 <script>
-// ---------- Formatters (NL) ----------
-const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
-const pct1 = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const fmtEuro = (n) => euro.format(n || 0);
-const fmtPct = (n) => pct1.format(n) + '%';
+// Parsing, berekeningen en formatters komen uit ../metrics.js.
 
-// ---------- CSV parsing ----------
-// Splitst een CSV-regel met respect voor quotes.
-function splitCsvLine(line) {
-  const out = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') {
-      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === ',' && !inQ) {
-      out.push(cur); cur = '';
-    } else {
-      cur += c;
-    }
-  }
-  out.push(cur);
-  return out;
-}
-
-// NL-bedrag "€1.298,29" -> 1298.29
-function parseBedrag(raw) {
-  if (raw == null) return 0;
-  let s = String(raw).trim();
-  if (s === '') return 0;
-  s = s.replace(/€/g, '').replace(/\s/g, '').replace(/\./g, '').replace(/,/g, '.');
-  s = s.replace(/[^0-9.\-]/g, '');
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-
-// Geldige datum YYYY-MM-DD?
-function parseDatum(raw) {
-  if (raw == null) return null;
-  const s = String(raw).trim();
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  return s;
-}
-
-// Verwachte kolomnamen in de sheet. Kolommen worden op naam herkend, zodat
-// dezelfde code werkt met of zonder de optionele 'locale campagnes'-kolom.
-const KOLOMMEN = {
-  datum: 'Datum',
-  meta: 'Meta Ads kosten',
-  google: 'Google Ads kosten',
-  microsoft: 'Microsoft Ads Kosten', // optioneel; telt mee in de ad-kosten
-  locale: 'Kosten locale campagnes', // optioneel; wordt afgetrokken
-  netto: 'Netto inkomsten (ex btw)'
-};
-let heeftLocaleKolom = false;
-let heeftMicrosoftKolom = false;
-
-function normHeader(s) {
-  return String(s == null ? '' : s).replace(/^﻿/, '').trim().toLowerCase();
-}
-
-function parseCsv(text) {
-  const lines = text.split(/\r?\n/);
-  if (lines.length === 0) return [];
-  const header = splitCsvLine(lines[0]).map(normHeader);
-  const idx = (naam) => header.indexOf(normHeader(naam));
-  const iDatum = idx(KOLOMMEN.datum);
-  const iMeta = idx(KOLOMMEN.meta);
-  const iGoogle = idx(KOLOMMEN.google);
-  const iMicrosoft = idx(KOLOMMEN.microsoft);
-  const iLocale = idx(KOLOMMEN.locale);
-  const iNetto = idx(KOLOMMEN.netto);
-  heeftLocaleKolom = iLocale !== -1;
-  heeftMicrosoftKolom = iMicrosoft !== -1;
-  const kolomDatum = iDatum === -1 ? 0 : iDatum; // fallback: eerste kolom
-  // Omzet in de sheet is bruto (incl. btw) -> delen door (1 + btwTarief) = netto ex btw.
-  const btwTarief = (typeof CONFIG !== 'undefined' && CONFIG.btwTarief != null) ? CONFIG.btwTarief : 0.21;
-
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === '') continue;
-    const cols = splitCsvLine(lines[i]);
-    const datum = parseDatum(cols[kolomDatum]);
-    if (!datum) continue; // sla instructie-/lege regels over
-    rows.push({
-      datum,
-      meta: parseBedrag(cols[iMeta]),
-      google: parseBedrag(cols[iGoogle]),
-      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft]),
-      locale: iLocale === -1 ? 0 : parseBedrag(cols[iLocale]),
-      netto: parseBedrag(cols[iNetto]) / (1 + btwTarief)
-    });
-  }
-  rows.sort((a, b) => a.datum.localeCompare(b.datum));
-  return rows;
-}
-
-// ---------- Staffel ----------
-function feeVoorTacos(tacosPct) {
-  for (const tred of CONFIG.staffel) {
-    if (tacosPct < tred.maxTacos) return tred;
-  }
-  return CONFIG.staffel[CONFIG.staffel.length - 1];
-}
-
-// Eerste (beste) trede en de TACOS-grens waarboven er geen fee meer is.
-const EERSTE_TRED = CONFIG.staffel[0];
-function noFeeThreshold() {
-  const eindig = CONFIG.staffel.map(t => t.maxTacos).filter(m => isFinite(m));
-  return eindig.length ? Math.max(...eindig) : null;
-}
-
-// ---------- Rendering ----------
 function toonFout(msg) {
   const b = document.getElementById('banner');
   b.textContent = msg;
@@ -357,93 +233,71 @@ function toonFout(msg) {
   document.getElementById('period').textContent = '';
 }
 
-function fmtDatumNL(iso) {
-  const [y, m, d] = iso.split('-');
-  return `${d}-${m}-${y}`;
-}
-
-function isDark() {
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
 let lastRows = null;
 
-function render(rows) {
+function render(rows, info) {
   lastRows = rows;
-  document.getElementById('title').textContent = `${CONFIG.klant} — performance dashboard`;
+  document.getElementById('title').textContent = `${CONFIG.naam} — performance dashboard`;
 
-  if (rows.length === 0) {
+  if (!rows || rows.length === 0) {
     toonFout('Geen geldige datarijen gevonden in de sheet.');
     return;
   }
 
   document.getElementById('content').style.display = 'block';
 
-  const totMeta = rows.reduce((s, r) => s + r.meta, 0);
-  const totGoogle = rows.reduce((s, r) => s + r.google, 0);
-  const totMicrosoft = rows.reduce((s, r) => s + (r.microsoft || 0), 0);
-  const totLocale = rows.reduce((s, r) => s + (r.locale || 0), 0);
-  const brutoKosten = totMeta + totGoogle + totMicrosoft;
-  const effKosten = brutoKosten - totLocale; // locale campagnes eraf
-  const totNetto = rows.reduce((s, r) => s + r.netto, 0);
+  const m = computeMetrics(rows, CONFIG);
 
-  const eerste = rows[0].datum, laatste = rows[rows.length - 1].datum;
   document.getElementById('period').textContent =
-    `Periode: ${fmtDatumNL(eerste)} t/m ${fmtDatumNL(laatste)} · ${rows.length} dagen`;
+    `Periode: ${fmtDatumNL(m.eerste)} t/m ${fmtDatumNL(m.laatste)} · ${m.aantalDagen} dagen`;
 
   // TACOS (o.b.v. effectieve ad-kosten, ná aftrek van de locale campagnes)
-  const heeftOmzet = totNetto > 0;
-  const tacos = heeftOmzet ? (effKosten / totNetto) * 100 : null;
-
   const tacosCard = document.getElementById('tacosCard');
   const tacosValue = document.getElementById('tacosValue');
   const tacosStatus = document.getElementById('tacosStatus');
   tacosCard.classList.remove('tacos-green', 'tacos-orange', 'tacos-red');
 
-  let tred = null;
-  if (!heeftOmzet) {
+  if (!m.heeftOmzet) {
     tacosValue.textContent = 'n.v.t.';
     tacosStatus.textContent = 'Geen omzet — TACOS niet te berekenen';
     tacosCard.classList.add('tacos-orange');
   } else {
-    tacosValue.textContent = fmtPct(tacos);
-    tred = feeVoorTacos(tacos);
-    if (tred === EERSTE_TRED) {
+    tacosValue.textContent = fmtPct(m.tacos);
+    if (m.tred === eersteTred(CONFIG.staffel)) {
       tacosCard.classList.add('tacos-green');
-      tacosStatus.textContent = `Beste trede — fee ${fmtPct(tred.fee * 100)} over omzet ex btw`;
-    } else if (tred.fee === 0) {
+      tacosStatus.textContent = `Beste trede — fee ${fmtPct(m.tred.fee * 100)} over omzet ex btw`;
+    } else if (m.tred.fee === 0) {
       tacosCard.classList.add('tacos-red');
-      const grens = noFeeThreshold();
+      const grens = noFeeThreshold(CONFIG.staffel);
       tacosStatus.textContent = grens != null
         ? `Vanaf ${fmtPct(grens)} — geen performance fee`
         : 'Geen performance fee';
     } else {
       tacosCard.classList.add('tacos-orange');
-      tacosStatus.textContent = `Fee ${fmtPct(tred.fee * 100)} over omzet ex btw`;
+      tacosStatus.textContent = `Fee ${fmtPct(m.tred.fee * 100)} over omzet ex btw`;
     }
   }
 
-  // Overige KPI's
-  const gemPerDag = totNetto / rows.length;
-  document.getElementById('revValue').textContent = fmtEuro(totNetto);
-  document.getElementById('revSub').textContent = `Gemiddeld ${fmtEuro(gemPerDag)} per dag`;
+  // Netto inkomsten
+  document.getElementById('revValue').textContent = fmtEuro(m.totNetto);
+  document.getElementById('revSub').textContent = `Gemiddeld ${fmtEuro(m.gemPerDag)} per dag`;
 
+  // Ad-kosten
   document.getElementById('costLabel').textContent =
-    heeftLocaleKolom ? 'Ad-kosten (na aftrek locale)' : 'Ad-kosten totaal';
-  document.getElementById('costValue').textContent = fmtEuro(effKosten);
-  let kostenSub = `Meta ${fmtEuro(totMeta)} · Google ${fmtEuro(totGoogle)}`;
-  if (heeftMicrosoftKolom) kostenSub += ` · Microsoft ${fmtEuro(totMicrosoft)}`;
-  if (heeftLocaleKolom) kostenSub += `<br>Locale campagnes −${fmtEuro(totLocale)} afgetrokken`;
+    info.heeftLocaleKolom ? 'Ad-kosten (na aftrek locale)' : 'Ad-kosten totaal';
+  document.getElementById('costValue').textContent = fmtEuro(m.effKosten);
+  let kostenSub = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  if (info.heeftMicrosoftKolom) kostenSub += ` · Microsoft ${fmtEuro(m.totMicrosoft)}`;
+  if (info.heeftLocaleKolom) kostenSub += `<br>Locale campagnes −${fmtEuro(m.totLocale)} afgetrokken`;
   document.getElementById('costSub').innerHTML = kostenSub;
 
-  const feePct = tred ? tred.fee : 0;
-  const feeBedrag = heeftOmzet ? feePct * totNetto : 0;
-  document.getElementById('feeValue').textContent = fmtEuro(feeBedrag);
-  document.getElementById('feeSub').textContent = heeftOmzet
-    ? `Actief fee-% : ${fmtPct(feePct * 100)}`
+  // Performance fee
+  document.getElementById('feeValue').textContent = fmtEuro(m.feeBedrag);
+  document.getElementById('feeSub').textContent = m.heeftOmzet
+    ? `Actief fee-% : ${fmtPct(m.feePct * 100)}`
     : 'Geen omzet';
 
-  renderStaffel(tred);
+  renderStaffel(m.tred);
   renderTacosChart(rows);
   renderDailyChart(rows);
 }
@@ -497,7 +351,7 @@ function renderTacosChart(rows) {
     return cumNetto > 0 ? (cumKost / cumNetto) * 100 : null;
   });
 
-  const grens = noFeeThreshold();
+  const grens = noFeeThreshold(CONFIG.staffel);
   const grensLabel = grens == null ? '' : (Number.isInteger(grens) ? String(grens) : pct1.format(grens));
   const datasets = [
     {
@@ -576,11 +430,10 @@ async function laadData() {
     const res = await fetch(CONFIG.csvUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    const rows = parseCsv(text);
-    render(rows);
-    const nu = new Date();
+    const { rows, heeftLocaleKolom, heeftMicrosoftKolom } = parseSheet(text, CONFIG);
+    render(rows, { heeftLocaleKolom, heeftMicrosoftKolom });
     document.getElementById('footer').textContent =
-      'Laatst bijgewerkt: ' + nu.toLocaleString('nl-NL');
+      'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
   } catch (err) {
     console.error(err);
     toonFout('Kon de data niet ophalen — controleer of de sheet gepubliceerd is en de link klopt.');
