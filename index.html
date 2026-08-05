@@ -136,17 +136,28 @@
 <script>
 // Parsing/berekeningen/formatters komen uit metrics.js; klantenlijst uit clients.js.
 
+// Haalt per klant de metrics voor de huidige maand op en normaliseert naar
+// { netto, adKosten, fee } — ongeacht het deal-type (TACOS of CMS-target).
 async function laadKlant(client) {
+  if (!client.csvUrl) return { client, ok: false, pending: true };
   try {
     const res = await fetch(client.csvUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
+
+    if (client.type === 'cms') {
+      const { rows } = parseCmsSheet(text, client);
+      if (!rows.length) throw new Error('geen datarijen');
+      const maand = kiesMaand(rows);
+      const m = computeHorecaMetrics(filterMaand(rows, maand), maand, client);
+      return { client, ok: true, maand, dagen: m.dagen, netto: m.actualExBtw, adKosten: null, fee: m.feeNu ? m.feeNu.fee : 0 };
+    }
+
     const { rows } = parseSheet(text, client);
     if (!rows.length) throw new Error('geen datarijen');
-    // Toon de huidige kalendermaand (of de laatste maand met data) — fee per maand.
     const maand = kiesMaand(rows);
-    const maandRows = filterMaand(rows, maand);
-    return { client, m: computeMetrics(maandRows, client), maand, ok: true };
+    const m = computeMetrics(filterMaand(rows, maand), client);
+    return { client, ok: true, maand, dagen: m.aantalDagen, netto: m.totNetto, adKosten: m.effKosten, fee: m.feeBedrag };
   } catch (e) {
     console.error('Klant laden mislukt:', client.naam, e);
     return { client, ok: false };
@@ -172,26 +183,26 @@ function render(results) {
 
     let rechts;
     if (res.ok) {
-      const m = res.m;
-      sKosten += m.effKosten; sFee += m.feeBedrag;
-      const periode = res.maand
-        ? `${maandLabel(res.maand)} · ${m.aantalDagen} dagen`
-        : '—';
+      if (res.adKosten != null) sKosten += res.adKosten;
+      sFee += res.fee;
+      const periode = res.maand ? `${maandLabel(res.maand)} · ${res.dagen} dagen` : '—';
       rechts = `
         <div class="naam-blok">
           <div class="naam">${c.naam}</div>
           <div class="periode">${periode}</div>
         </div>
         <div class="metrics-row">
-          ${metricBlok('Netto inkomsten', fmtEuro(m.totNetto))}
-          ${metricBlok('Ad-kosten', fmtEuro(m.effKosten))}
-          ${metricBlok('Performance fee', fmtEuro(m.feeBedrag), 'fee')}
+          ${metricBlok('Netto inkomsten', fmtEuro(res.netto))}
+          ${metricBlok('Ad-kosten', res.adKosten != null ? fmtEuro(res.adKosten) : 'n.v.t.')}
+          ${metricBlok('Performance fee', fmtEuro(res.fee), 'fee')}
         </div>`;
     } else {
+      const tekst = res.pending ? 'Nog te koppelen' : 'Kon data niet ophalen';
+      const klasse = res.pending ? 'periode' : 'periode err';
       rechts = `
         <div class="naam-blok">
           <div class="naam">${c.naam}</div>
-          <div class="periode err">Kon data niet ophalen</div>
+          <div class="${klasse}">${tekst}</div>
         </div>
         <div class="metrics-row">
           ${metricBlok('Netto inkomsten', '—')}
@@ -216,7 +227,7 @@ async function init() {
   const results = await Promise.all(CLIENTS.map(laadKlant));
   // Sorteer op performance fee (hoog -> laag); klanten zonder data onderaan.
   results.sort((a, b) => {
-    if (a.ok && b.ok) return b.m.feeBedrag - a.m.feeBedrag;
+    if (a.ok && b.ok) return b.fee - a.fee;
     return (a.ok ? 0 : 1) - (b.ok ? 0 : 1);
   });
   render(results);

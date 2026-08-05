@@ -136,6 +136,93 @@ function computeMetrics(rows, config) {
   };
 }
 
+/* ---------- Horecagoedkoop: CMS-target deal ----------
+   Andere deal dan de TACOS-klanten. Per maand een CMS-target (incl. btw).
+   Actual = som van de dagelijkse 'CMS incl. btw'. Beide worden omgerekend naar
+   'CMS − retour & emballage' via ÷(1+btw) en ×(1−retourEmballage).
+   Fee-banden op doelbereik:
+     0–50% van target      -> 0%
+     50–100% van target     -> feeBanden.band2 (1,2%) over het behaalde deel in die band
+     >100% van target       -> feeBanden.band3 (2%) over het deel boven target
+*/
+function parseCmsSheet(text, config) {
+  const kolom = (config && config.cmsKolom) || 'CMS incl. btw';
+  const lines = String(text).split(/\r?\n/);
+  if (!lines.length) return { rows: [] };
+  const header = splitCsvLine(lines[0]).map(normHeader);
+  const iDatum = header.indexOf(normHeader('Datum'));
+  const kolomDatum = iDatum === -1 ? 0 : iDatum;
+  let iCms = header.indexOf(normHeader(kolom));
+  if (iCms === -1) iCms = 1; // fallback: tweede kolom
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[kolomDatum]);
+    if (!datum) continue;
+    rows.push({ datum, cmsInclBtw: parseBedrag(cols[iCms]) });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return { rows };
+}
+
+function cmsNaRetour(inclBtw, config) {
+  const btw = (config && config.btwTarief != null) ? config.btwTarief : 0.21;
+  const re = (config && config.retourEmballage != null) ? config.retourEmballage : 0.20;
+  return inclBtw / (1 + btw) * (1 - re);
+}
+
+function horecaFee(actualNetto, targetNetto, banden) {
+  const b2 = (banden && banden.band2 != null) ? banden.band2 : 0.012;
+  const b3 = (banden && banden.band3 != null) ? banden.band3 : 0.02;
+  const half = 0.5 * targetNetto;
+  const band2Bedrag = Math.max(0, Math.min(actualNetto, targetNetto) - half);
+  const band3Bedrag = Math.max(0, actualNetto - targetNetto);
+  return {
+    fee: b2 * band2Bedrag + b3 * band3Bedrag,
+    band1Bedrag: half, band2Bedrag, band3Bedrag,
+    feeBand2: b2 * band2Bedrag, feeBand3: b3 * band3Bedrag
+  };
+}
+
+function dagenInMaand(maandISO) {
+  const [y, m] = maandISO.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+function computeHorecaMetrics(monthRows, maandISO, config) {
+  const targetIncl = (config.targets && config.targets[maandISO] != null) ? config.targets[maandISO] : null;
+  const targetNetto = targetIncl != null ? cmsNaRetour(targetIncl, config) : null;
+  const btw = (config.btwTarief != null) ? config.btwTarief : 0.21;
+
+  const actualInclToDate = monthRows.reduce((s, r) => s + r.cmsInclBtw, 0);
+  const actualNettoToDate = cmsNaRetour(actualInclToDate, config);
+  const actualExBtw = actualInclToDate / (1 + btw);
+
+  const dagen = monthRows.length;
+  const dim = dagenInMaand(maandISO);
+  const dagenVerstreken = dagen ? Number(monthRows[dagen - 1].datum.slice(8, 10)) : 0; // dag-van-maand laatste rij
+
+  // Projectie: extrapoleer de pace naar het maandeinde.
+  const projectedIncl = dagenVerstreken > 0 ? actualInclToDate / dagenVerstreken * dim : 0;
+  const projectedNetto = cmsNaRetour(projectedIncl, config);
+
+  const feeNu = targetNetto != null ? horecaFee(actualNettoToDate, targetNetto, config.feeBanden) : null;
+  const feeVerwacht = targetNetto != null ? horecaFee(projectedNetto, targetNetto, config.feeBanden) : null;
+
+  return {
+    targetIncl, targetNetto, btw,
+    actualInclToDate, actualNettoToDate, actualExBtw,
+    dagen, dagenVerstreken, dagenInMaand: dim,
+    projectedIncl, projectedNetto,
+    feeNu, feeVerwacht,
+    behaaldPct: targetNetto ? (actualNettoToDate / targetNetto * 100) : null,
+    projectiePct: targetNetto ? (projectedNetto / targetNetto * 100) : null,
+    eerste: dagen ? monthRows[0].datum : null,
+    laatste: dagen ? monthRows[dagen - 1].datum : null
+  };
+}
+
 // ---------- Maanden ----------
 // Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
 // hieronder filteren/kiezen we de juiste maand.

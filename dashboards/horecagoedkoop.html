@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Horecagoedkoop — performance dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../metrics.js"></script>
+<script src="../clients.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); --accent: #2563eb;
+    --green: #16a34a; --green-bg: #dcfce7; --orange: #ea580c; --orange-bg: #ffedd5;
+    --red: #dc2626; --red-bg: #fee2e2; --grid: rgba(0,0,0,0.06);
+    --prodos-blue: #234B96; --prodos-green: #2EE86F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac; --border: #2a2e37;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6;
+      --green: #22c55e; --green-bg: #14321f; --orange: #fb923c; --orange-bg: #3a2410;
+      --red: #f87171; --red-bg: #3a1518; --grid: rgba(255,255,255,0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac; --border: #2a2e37;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6;
+    --green: #22c55e; --green-bg: #14321f; --orange: #fb923c; --orange-bg: #3a2410;
+    --red: #f87171; --red-bg: #3a1518; --grid: rgba(255,255,255,0.07);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+  header { margin-bottom: 24px; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; }
+  header .period { color: var(--muted); font-size: 14px; }
+  .theme-switch {
+    display: inline-flex; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; box-shadow: var(--shadow); flex-shrink: 0;
+  }
+  .theme-switch button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+    font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button.active { background: var(--accent); color: #fff; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .maand-select {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600;
+    box-shadow: var(--shadow); cursor: pointer;
+  }
+  header .client-tag {
+    display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+  }
+  header .client-tag a { color: inherit; text-decoration: none; }
+  header .client-tag a:hover { color: var(--accent); }
+
+  .kpis { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi .sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  /* Prominente doelbereik-kaart */
+  .big-card { display: flex; flex-direction: column; justify-content: center; border-width: 2px; }
+  .big-card .label { font-size: 14px; }
+  .big-card .value { font-size: 44px; line-height: 1; margin: 4px 0; }
+  .big-card .status { font-size: 14px; font-weight: 600; margin-top: 8px; }
+  .st-green  { border-color: var(--green);  background: var(--green-bg); }
+  .st-orange { border-color: var(--orange); background: var(--orange-bg); }
+  .st-red    { border-color: var(--red);    background: var(--red-bg); }
+  .st-green .value, .st-green .status  { color: var(--green); }
+  .st-orange .value, .st-orange .status { color: var(--orange); }
+  .st-red .value, .st-red .status    { color: var(--red); }
+  .fee-accent .value { color: var(--prodos-blue); }
+  :root[data-theme="dark"] .fee-accent .value { color: var(--prodos-green); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fee-accent .value { color: var(--prodos-green); } }
+
+  /* Fee-banden visual */
+  .banden { margin-bottom: 20px; }
+  .banden h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .banden-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 560px) { .banden-row { grid-template-columns: 1fr; } }
+  .seg { border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; background: var(--card); position: relative; }
+  .seg .range { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .seg .fee { font-size: 20px; font-weight: 700; }
+  .seg .earned { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .seg .now { font-size: 12px; font-weight: 700; margin-top: 6px; display: none; }
+  .seg.active { border-width: 2px; }
+  .seg.active .now { display: block; }
+  .seg.active-green { border-color: var(--green); background: var(--green-bg); }
+  .seg.active-green .now { color: var(--green); }
+  .seg.active-red { border-color: var(--red); background: var(--red-bg); }
+  .seg.active-red .now { color: var(--red); }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .chart-box { position: relative; height: 320px; }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  .banner {
+    padding: 16px 20px; border-radius: 12px; margin-bottom: 20px; font-size: 14px;
+    border: 1px solid var(--orange); background: var(--orange-bg); color: var(--orange); display: none;
+  }
+  .banner.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===================== KLANT ===================== -->
+  <script>
+    const CONFIG = CLIENTS.find(c => c.id === 'horecagoedkoop');
+  </script>
+  <!-- ================================================= -->
+
+  <header>
+    <div class="head-row">
+      <div>
+        <div class="client-tag"><a href="../index.html">← Prodos · consultant overzicht</a></div>
+        <h1 id="title">— performance dashboard</h1>
+        <div class="period" id="period">Data wordt geladen…</div>
+      </div>
+      <div class="controls">
+        <select id="maandSelect" class="maand-select" aria-label="Maand kiezen"></select>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
+          <button type="button" data-theme-choice="system">Systeem</button>
+          <button type="button" data-theme-choice="light">Licht</button>
+          <button type="button" data-theme-choice="dark">Donker</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div id="content" style="display:none;">
+    <div class="kpis">
+      <div class="card kpi big-card" id="doelCard">
+        <div class="label">Doelbereik (van target)</div>
+        <div class="value" id="doelValue">—</div>
+        <div class="status" id="doelStatus">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">CMS − retour &amp; emballage</div>
+        <div class="value" id="cmsValue">—</div>
+        <div class="sub" id="cmsSub">—</div>
+      </div>
+      <div class="card kpi fee-accent">
+        <div class="label">Verwachte fee (maand)</div>
+        <div class="value" id="feeVerwValue">—</div>
+        <div class="sub" id="feeVerwSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Gerealiseerde fee (tot nu)</div>
+        <div class="value" id="feeNuValue">—</div>
+        <div class="sub" id="feeNuSub">—</div>
+      </div>
+    </div>
+
+    <div class="card banden">
+      <h2>Performance fee-banden (doelbereik)</h2>
+      <div class="banden-row" id="bandenRow"></div>
+    </div>
+
+    <div class="charts">
+      <div class="card chart-card">
+        <h2>CMS − retour &amp; emballage vs. target</h2>
+        <div class="chart-box"><canvas id="cmsChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Dagelijkse CMS − retour &amp; emballage</h2>
+        <div class="chart-box"><canvas id="dailyCmsChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+// Parsing/berekeningen/formatters/maanden komen uit ../metrics.js.
+
+function toonFout(msg, soort) {
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.classList.add('show');
+  document.getElementById('period').textContent = '';
+}
+
+let lastRender = null; // { monthRows, maandISO, m }
+
+function render(monthRows, maandISO) {
+  document.getElementById('title').textContent = `${CONFIG.naam} — performance dashboard`;
+  const banner = document.getElementById('banner');
+  banner.classList.remove('show');
+
+  if (!monthRows || monthRows.length === 0) {
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = maandISO ? `Geen data voor ${maandLabel(maandISO)}.` : 'Geen geldige datarijen gevonden in de sheet.';
+    banner.classList.add('show');
+    document.getElementById('period').textContent = maandISO ? maandLabel(maandISO) : '';
+    return;
+  }
+
+  document.getElementById('content').style.display = 'block';
+  const m = computeHorecaMetrics(monthRows, maandISO, CONFIG);
+  lastRender = { monthRows, maandISO, m };
+
+  document.getElementById('period').textContent =
+    `${maandLabel(maandISO)} · t/m ${fmtDatumNL(m.laatste)} · dag ${m.dagenVerstreken}/${m.dagenInMaand}`;
+
+  // Doelbereik-kaart
+  const doelCard = document.getElementById('doelCard');
+  doelCard.classList.remove('st-green', 'st-orange', 'st-red');
+  if (m.targetNetto == null) {
+    document.getElementById('doelValue').textContent = 'n.v.t.';
+    document.getElementById('doelStatus').textContent = `Geen target ingesteld voor ${maandLabel(maandISO)}`;
+    doelCard.classList.add('st-orange');
+  } else {
+    document.getElementById('doelValue').textContent = fmtPct(m.behaaldPct);
+    if (m.behaaldPct >= 100) {
+      doelCard.classList.add('st-green');
+      document.getElementById('doelStatus').textContent = 'Boven target — 2% fee over het meerdere';
+    } else if (m.behaaldPct >= 50) {
+      doelCard.classList.add('st-orange');
+      document.getElementById('doelStatus').textContent = 'Tussen 50% en 100% — 1,2% fee over dat deel';
+    } else {
+      doelCard.classList.add('st-red');
+      document.getElementById('doelStatus').textContent = 'Onder 50% — nog geen fee';
+    }
+  }
+
+  // CMS − retour & emballage
+  document.getElementById('cmsValue').textContent = fmtEuro(m.actualNettoToDate);
+  document.getElementById('cmsSub').innerHTML = m.targetNetto != null
+    ? `Target ${fmtEuro(m.targetNetto)} · CMS ex btw ${fmtEuro(m.actualExBtw)}`
+    : `CMS ex btw ${fmtEuro(m.actualExBtw)}`;
+
+  // Verwachte fee (projectie naar maandeinde)
+  document.getElementById('feeVerwValue').textContent = m.feeVerwacht ? fmtEuro(m.feeVerwacht.fee) : '—';
+  document.getElementById('feeVerwSub').textContent = m.projectiePct != null
+    ? `Projectie ${fmtPct(m.projectiePct)} van target (pace × maand)`
+    : 'Geen target';
+
+  // Gerealiseerde fee (tot nu)
+  document.getElementById('feeNuValue').textContent = m.feeNu ? fmtEuro(m.feeNu.fee) : '—';
+  document.getElementById('feeNuSub').textContent = `o.b.v. ${m.dagen} dagen data`;
+
+  renderBanden(m);
+  renderCmsChart(monthRows, m, maandISO);
+  renderDailyCmsChart(monthRows);
+}
+
+function renderBanden(m) {
+  const row = document.getElementById('bandenRow');
+  const b2 = CONFIG.feeBanden.band2, b3 = CONFIG.feeBanden.band3;
+  const pct = m.behaaldPct;
+  const fn = m.feeNu;
+  const segs = [
+    { range: '0–50%',   fee: '0%',                earned: fn ? fmtEuro(0) : '—',              actief: pct != null && pct < 50,  geeftFee: false },
+    { range: '50–100%', fee: fmtPct(b2 * 100),    earned: fn ? fmtEuro(fn.feeBand2) : '—',    actief: pct != null && pct >= 50 && pct < 100, geeftFee: true },
+    { range: '>100%',   fee: fmtPct(b3 * 100),    earned: fn ? fmtEuro(fn.feeBand3) : '—',    actief: pct != null && pct >= 100, geeftFee: true }
+  ];
+  row.innerHTML = '';
+  segs.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'seg';
+    if (s.actief) { div.classList.add('active'); div.classList.add(s.geeftFee ? 'active-green' : 'active-red'); }
+    div.innerHTML = `
+      <div class="range">${s.range} van target</div>
+      <div class="fee">${s.fee}</div>
+      <div class="earned">fee: ${s.earned}</div>
+      <div class="now">← nu</div>`;
+    row.appendChild(div);
+  });
+}
+
+let cmsChartObj = null, dailyCmsChartObj = null;
+function withAlpha(hex, a) {
+  const h = hex.replace('#', '');
+  return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+function chartColors() {
+  const s = getComputedStyle(document.body);
+  return {
+    text: s.getPropertyValue('--text').trim() || '#1a1d21',
+    grid: s.getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.06)',
+    blue: s.getPropertyValue('--prodos-blue').trim() || '#234B96',
+    green: s.getPropertyValue('--prodos-green').trim() || '#2EE86F'
+  };
+}
+
+function renderCmsChart(monthRows, m, maandISO) {
+  const c = chartColors();
+  const dim = m.dagenInMaand;
+  const lastDay = m.dagenVerstreken;
+  const labels = Array.from({ length: dim }, (_, i) => String(i + 1).padStart(2, '0'));
+
+  // dagelijkse CMS incl. btw per dag-van-maand
+  const perDayIncl = new Array(dim + 1).fill(0);
+  monthRows.forEach(r => { const d = Number(r.datum.slice(8, 10)); perDayIncl[d] += r.cmsInclBtw; });
+
+  let cum = 0;
+  const cumNetto = labels.map((_, i) => {
+    const day = i + 1;
+    if (day > lastDay) return null;
+    cum += perDayIncl[day];
+    return cmsNaRetour(cum, CONFIG);
+  });
+
+  const datasets = [{
+    label: 'Cumulatieve CMS − r&e',
+    data: cumNetto,
+    borderColor: c.blue, backgroundColor: withAlpha(c.blue, 0.12),
+    borderWidth: 2, tension: 0.2, fill: true, pointRadius: 2, spanGaps: false
+  }];
+
+  // Prognose-lijn (van vandaag naar maandeinde) als de maand nog niet compleet is
+  if (m.targetNetto != null && lastDay < dim) {
+    const prognose = labels.map((_, i) => {
+      const day = i + 1;
+      if (day === lastDay) return m.actualNettoToDate;
+      if (day === dim) return m.projectedNetto;
+      return null;
+    });
+    datasets.push({
+      label: 'Prognose maandeinde',
+      data: prognose,
+      borderColor: c.blue, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, spanGaps: true, fill: false
+    });
+  }
+
+  if (m.targetNetto != null) {
+    datasets.push({
+      label: 'Target',
+      data: labels.map(() => m.targetNetto),
+      borderColor: '#dc2626', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false
+    });
+    datasets.push({
+      label: '50% target',
+      data: labels.map(() => 0.5 * m.targetNetto),
+      borderColor: '#ea580c', borderDash: [3, 4], borderWidth: 1, pointRadius: 0, fill: false
+    });
+  }
+
+  if (cmsChartObj) cmsChartObj.destroy();
+  cmsChartObj = new Chart(document.getElementById('cmsChart'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? '—' : fmtEuro(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid }, title: { display: true, text: 'dag van de maand', color: c.text } },
+        y: { ticks: { color: c.text, callback: (v) => euro.format(v).replace(/,00$/, '') }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderDailyCmsChart(monthRows) {
+  const c = chartColors();
+  const labels = monthRows.map(r => fmtDatumNL(r.datum));
+  if (dailyCmsChartObj) dailyCmsChartObj.destroy();
+  dailyCmsChartObj = new Chart(document.getElementById('dailyCmsChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'CMS − retour & emballage',
+        data: monthRows.map(r => cmsNaRetour(r.cmsInclBtw, CONFIG)),
+        backgroundColor: c.blue, borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, callback: (v) => euro.format(v).replace(/,00$/, '') }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ---------- Data laden ----------
+let alleRijen = [];
+
+async function laadData() {
+  document.getElementById('footer').textContent = 'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
+  if (!CONFIG.csvUrl) {
+    toonFout('Sheet nog niet gekoppeld — voeg de gepubliceerde CSV-link toe bij deze klant in clients.js.');
+    document.getElementById('maandSelect').style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch(CONFIG.csvUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    alleRijen = parseCmsSheet(text, CONFIG).rows;
+    vulMaandKiezer();
+  } catch (err) {
+    console.error(err);
+    toonFout('Kon de data niet ophalen — controleer of de sheet gepubliceerd is en de link klopt.');
+  }
+}
+
+function vulMaandKiezer() {
+  const sel = document.getElementById('maandSelect');
+  const maanden = beschikbareMaanden(alleRijen);
+  if (!maanden.length) { render([], null); return; }
+  sel.innerHTML = maanden.slice().reverse().map(mm => `<option value="${mm}">${maandLabel(mm)}</option>`).join('');
+  const standaard = kiesMaand(alleRijen);
+  sel.value = standaard;
+  sel.onchange = () => toonMaand(sel.value);
+  toonMaand(standaard);
+}
+
+function toonMaand(maandISO) {
+  render(filterMaand(alleRijen, maandISO), maandISO);
+}
+
+// ---------- Thema-schakelaar ----------
+const THEME_KEY = 'prodos-theme';
+function redrawCharts() {
+  if (lastRender) { renderCmsChart(lastRender.monthRows, lastRender.m, lastRender.maandISO); renderDailyCmsChart(lastRender.monthRows); }
+}
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'light' || choice === 'dark') root.setAttribute('data-theme', choice);
+  else root.removeAttribute('data-theme');
+  document.querySelectorAll('#themeSwitch button').forEach(b => b.classList.toggle('active', b.dataset.themeChoice === choice));
+  redrawCharts();
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  const choice = saved || 'system';
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.addEventListener('click', () => {
+      const c = b.dataset.themeChoice;
+      try { localStorage.setItem(THEME_KEY, c); } catch (e) {}
+      applyTheme(c);
+    }));
+  applyTheme(choice);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!document.documentElement.hasAttribute('data-theme')) redrawCharts();
+  });
+})();
+
+laadData();
+</script>
+</body>
+</html>

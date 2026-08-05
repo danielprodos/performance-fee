@@ -50,5 +50,24 @@ const CLIENTS = [
       { maxTacos: 15,       fee: 0.02,  labelRange: '12–15%' },
       { maxTacos: Infinity, fee: 0,     labelRange: '≥15%' }
     ]
+  },
+  {
+    // Andere deal: fee op basis van maandelijks CMS-target (geen TACOS).
+    id: 'horecagoedkoop',
+    naam: 'Horecagoedkoop',
+    dashboard: 'dashboards/horecagoedkoop.html',
+    type: 'cms',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    cmsKolom: 'CMS incl. btw', // dagkolom in de sheet
+    btwTarief: 0.21,           // CMS ex btw = incl ÷ 1,21
+    retourEmballage: 0.20,     // "− retour & emballage" = ex btw × 0,80
+    // Maandtargets = CMS incl. btw per maand
+    targets: {
+      '2026-06': 581911,
+      '2026-07': 467423,
+      '2026-08': 394221
+    },
+    // Fee-banden op doelbereik (van 'CMS − retour & emballage')
+    feeBanden: { band2: 0.012, band3: 0.02 } // 50–100%: 1,2% · >100%: 2%
   }
 ];
