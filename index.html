@@ -65,7 +65,7 @@
   }
 
   /* Totalen-balk */
-  .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .totals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
   @media (max-width: 620px) { .totals { grid-template-columns: 1fr; } }
   .totals .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
   .totals .value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
@@ -122,7 +122,6 @@
   </header>
 
   <div class="totals" id="totals" style="display:none;">
-    <div class="card"><div class="label">Netto inkomsten (totaal)</div><div class="value" id="totNetto">—</div></div>
     <div class="card"><div class="label">Ad-kosten (totaal)</div><div class="value" id="totKosten">—</div></div>
     <div class="card fee"><div class="label">Performance fee (totaal)</div><div class="value" id="totFee">—</div></div>
   </div>
@@ -144,7 +143,10 @@ async function laadKlant(client) {
     const text = await res.text();
     const { rows } = parseSheet(text, client);
     if (!rows.length) throw new Error('geen datarijen');
-    return { client, m: computeMetrics(rows, client), ok: true };
+    // Toon de huidige kalendermaand (of de laatste maand met data) — fee per maand.
+    const maand = kiesMaand(rows);
+    const maandRows = filterMaand(rows, maand);
+    return { client, m: computeMetrics(maandRows, client), maand, ok: true };
   } catch (e) {
     console.error('Klant laden mislukt:', client.naam, e);
     return { client, ok: false };
@@ -160,7 +162,7 @@ function render(results) {
   const lijst = document.getElementById('klantList');
   lijst.innerHTML = '';
 
-  let sNetto = 0, sKosten = 0, sFee = 0;
+  let sKosten = 0, sFee = 0;
 
   results.forEach((res, i) => {
     const c = res.client;
@@ -171,9 +173,9 @@ function render(results) {
     let rechts;
     if (res.ok) {
       const m = res.m;
-      sNetto += m.totNetto; sKosten += m.effKosten; sFee += m.feeBedrag;
-      const periode = m.eerste
-        ? `${fmtDatumNL(m.eerste)} – ${fmtDatumNL(m.laatste)} · ${m.aantalDagen} dagen`
+      sKosten += m.effKosten; sFee += m.feeBedrag;
+      const periode = res.maand
+        ? `${maandLabel(res.maand)} · ${m.aantalDagen} dagen`
         : '—';
       rechts = `
         <div class="naam-blok">
@@ -202,7 +204,6 @@ function render(results) {
     lijst.appendChild(a);
   });
 
-  document.getElementById('totNetto').textContent = fmtEuro(sNetto);
   document.getElementById('totKosten').textContent = fmtEuro(sKosten);
   document.getElementById('totFee').textContent = fmtEuro(sFee);
   document.getElementById('totals').style.display = 'grid';

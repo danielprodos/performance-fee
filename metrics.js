@@ -136,9 +136,41 @@ function computeMetrics(rows, config) {
   };
 }
 
+// ---------- Maanden ----------
+// Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
+// hieronder filteren/kiezen we de juiste maand.
+function maandVan(datumIso) { return String(datumIso).slice(0, 7); } // 'YYYY-MM'
+
+function beschikbareMaanden(rows) {
+  return [...new Set(rows.map(r => maandVan(r.datum)))].sort();
+}
+
+function huidigeMaandISO(nu) {
+  const d = nu || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Standaard = huidige kalendermaand als die data heeft, anders de laatste maand mét data.
+function kiesMaand(rows, gewenst) {
+  const maanden = beschikbareMaanden(rows);
+  if (!maanden.length) return null;
+  const doel = gewenst || huidigeMaandISO();
+  return maanden.includes(doel) ? doel : maanden[maanden.length - 1];
+}
+
+function filterMaand(rows, maandISO) {
+  if (!maandISO) return rows.slice();
+  return rows.filter(r => maandVan(r.datum) === maandISO);
+}
+
 // ---------- Formatters (NL) ----------
 const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
 const pct1 = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 function fmtEuro(n) { return euro.format(n || 0); }
 function fmtPct(n) { return pct1.format(n) + '%'; }
 function fmtDatumNL(iso) { const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; }
+function maandLabel(maandISO) {
+  const [y, m] = maandISO.split('-').map(Number);
+  const s = new Date(y, m - 1, 1).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1); // "Augustus 2026"
+}

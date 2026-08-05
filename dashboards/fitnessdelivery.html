@@ -87,6 +87,12 @@
   }
   .theme-switch button:hover { color: var(--text); }
   .theme-switch button.active { background: var(--accent); color: #fff; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .maand-select {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600;
+    box-shadow: var(--shadow); cursor: pointer;
+  }
   header .client-tag {
     display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
@@ -169,10 +175,13 @@
         <h1 id="title">— performance dashboard</h1>
         <div class="period" id="period">Data wordt geladen…</div>
       </div>
-      <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
-        <button type="button" data-theme-choice="system">Systeem</button>
-        <button type="button" data-theme-choice="light">Licht</button>
-        <button type="button" data-theme-choice="dark">Donker</button>
+      <div class="controls">
+        <select id="maandSelect" class="maand-select" aria-label="Maand kiezen"></select>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
+          <button type="button" data-theme-choice="system">Systeem</button>
+          <button type="button" data-theme-choice="light">Licht</button>
+          <button type="button" data-theme-choice="dark">Donker</button>
+        </div>
       </div>
     </div>
   </header>
@@ -235,12 +244,18 @@ function toonFout(msg) {
 
 let lastRows = null;
 
-function render(rows, info) {
+function render(rows, info, maandISO) {
   lastRows = rows;
   document.getElementById('title').textContent = `${CONFIG.naam} — performance dashboard`;
 
+  const banner = document.getElementById('banner');
+  banner.classList.remove('show');
+
   if (!rows || rows.length === 0) {
-    toonFout('Geen geldige datarijen gevonden in de sheet.');
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = maandISO ? `Geen data voor ${maandLabel(maandISO)}.` : 'Geen geldige datarijen gevonden in de sheet.';
+    banner.classList.add('show');
+    document.getElementById('period').textContent = maandISO ? maandLabel(maandISO) : '';
     return;
   }
 
@@ -249,7 +264,7 @@ function render(rows, info) {
   const m = computeMetrics(rows, CONFIG);
 
   document.getElementById('period').textContent =
-    `Periode: ${fmtDatumNL(m.eerste)} t/m ${fmtDatumNL(m.laatste)} · ${m.aantalDagen} dagen`;
+    `${maandLabel(maandISO || maandVan(m.eerste))} · ${fmtDatumNL(m.eerste)} t/m ${fmtDatumNL(m.laatste)} · ${m.aantalDagen} dagen`;
 
   // TACOS (o.b.v. effectieve ad-kosten, ná aftrek van de locale campagnes)
   const tacosCard = document.getElementById('tacosCard');
@@ -425,13 +440,18 @@ function renderDailyChart(rows) {
 }
 
 // ---------- Data laden ----------
+let alleRijen = [];
+let parseInfo = { heeftLocaleKolom: false, heeftMicrosoftKolom: false };
+
 async function laadData() {
   try {
     const res = await fetch(CONFIG.csvUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    const { rows, heeftLocaleKolom, heeftMicrosoftKolom } = parseSheet(text, CONFIG);
-    render(rows, { heeftLocaleKolom, heeftMicrosoftKolom });
+    const parsed = parseSheet(text, CONFIG);
+    alleRijen = parsed.rows;
+    parseInfo = { heeftLocaleKolom: parsed.heeftLocaleKolom, heeftMicrosoftKolom: parsed.heeftMicrosoftKolom };
+    vulMaandKiezer();
     document.getElementById('footer').textContent =
       'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
   } catch (err) {
@@ -440,6 +460,22 @@ async function laadData() {
     document.getElementById('footer').textContent =
       'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
   }
+}
+
+function vulMaandKiezer() {
+  const sel = document.getElementById('maandSelect');
+  const maanden = beschikbareMaanden(alleRijen);
+  if (!maanden.length) { render([], parseInfo, null); return; }
+  // Nieuwste maand bovenaan in de lijst.
+  sel.innerHTML = maanden.slice().reverse().map(mm => `<option value="${mm}">${maandLabel(mm)}</option>`).join('');
+  const standaard = kiesMaand(alleRijen); // huidige maand, of laatste met data
+  sel.value = standaard;
+  sel.onchange = () => toonMaand(sel.value);
+  toonMaand(standaard);
+}
+
+function toonMaand(maandISO) {
+  render(filterMaand(alleRijen, maandISO), parseInfo, maandISO);
 }
 
 // ---------- Thema-schakelaar (Systeem / Licht / Donker) ----------
