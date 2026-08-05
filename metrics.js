@@ -294,6 +294,90 @@ function computeUnitMetrics(monthRows, maandISO, config) {
   };
 }
 
+/* ---------- Profipack: baseline-banden ----------
+   Fee op omzet t.o.v. de baseline (2025) van díe kalendermaand:
+     0–100% van baseline    -> 0%
+     100–110% van baseline  -> rate2 (1%) over dat deel
+     >110% van baseline      -> rate3 (3%) over dat deel
+   met een maximum (cap) per maand. Baseline per maand-van-het-jaar (1–12).
+   Toont ook een pace-projectie naar het maandeinde.
+*/
+function parseBaselineSheet(text, config) {
+  const lines = String(text).split(/\r?\n/);
+  if (!lines.length) return { rows: [], heeftAdKosten: false };
+  const header = splitCsvLine(lines[0]).map(normHeader);
+  const iDatum = header.findIndex(h => h.includes('datum'));
+  const kolomDatum = iDatum === -1 ? 0 : iDatum;
+  const iMeta = header.findIndex(h => h.includes('meta'));
+  const iGoogle = header.findIndex(h => h.includes('google'));
+  let iOmzet = header.findIndex(h => h.includes('omzet') || h.includes('revenue') || h.includes('turnover'));
+  if (iOmzet === -1) {
+    for (let j = 0; j < header.length; j++) {
+      if (j !== kolomDatum && j !== iMeta && j !== iGoogle && header[j] !== '') { iOmzet = j; break; }
+    }
+  }
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1;
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[kolomDatum]);
+    if (!datum) continue;
+    rows.push({
+      datum,
+      omzet: iOmzet === -1 ? 0 : parseBedrag(cols[iOmzet]),
+      meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle])
+    });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return { rows, heeftAdKosten };
+}
+
+function computeBaselineMetrics(monthRows, maandISO, config) {
+  const btw = (config && config.btwTarief != null) ? config.btwTarief : 0;
+  const maandNr = Number(maandISO.split('-')[1]); // 1..12
+  const baseline = (config.baselines && config.baselines[maandNr] != null) ? config.baselines[maandNr] : null;
+  const f = config.fee || {};
+  const drempel2 = f.drempel2 != null ? f.drempel2 : 1.00; // 100%
+  const drempel3 = f.drempel3 != null ? f.drempel3 : 1.10; // 110%
+  const rate2 = f.rate2 != null ? f.rate2 : 0.01;
+  const rate3 = f.rate3 != null ? f.rate3 : 0.03;
+  const cap = f.cap != null ? f.cap : null;
+
+  const omzetToDate = monthRows.reduce((s, r) => s + (r.omzet || 0), 0) / (1 + btw);
+  const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
+  const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
+  const adKosten = totMeta + totGoogle;
+
+  function feeVoor(omzet) {
+    if (baseline == null) return null;
+    const t2 = baseline * drempel2, t3 = baseline * drempel3;
+    const band2Bedrag = Math.max(0, Math.min(omzet, t3) - t2);
+    const band3Bedrag = Math.max(0, omzet - t3);
+    const raw = rate2 * band2Bedrag + rate3 * band3Bedrag;
+    const fee = cap != null ? Math.min(raw, cap) : raw;
+    return { fee, raw, gecapt: cap != null && raw > cap, band2Bedrag, band3Bedrag, feeBand2: rate2 * band2Bedrag, feeBand3: rate3 * band3Bedrag, t2, t3 };
+  }
+
+  const dim = dagenInMaand(maandISO);
+  const rijenMetData = monthRows.filter(r => (r.omzet || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0);
+  const dagen = rijenMetData.length;
+  const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
+  const projectedOmzet = dagenVerstreken > 0 ? omzetToDate / dagenVerstreken * dim : 0;
+
+  return {
+    baseline, btw, drempel2, drempel3, rate2, rate3, cap,
+    omzetToDate, projectedOmzet, totMeta, totGoogle, adKosten,
+    feeNu: feeVoor(omzetToDate), feeVerwacht: feeVoor(projectedOmzet),
+    pctVanBaseline: baseline ? omzetToDate / baseline * 100 : null,
+    projectiePct: baseline ? projectedOmzet / baseline * 100 : null,
+    dagen, dagenVerstreken, dagenInMaand: dim,
+    eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (monthRows.length ? monthRows[monthRows.length - 1].datum : null)
+  };
+}
+
 // ---------- Maanden ----------
 // Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
 // hieronder filteren/kiezen we de juiste maand.

@@ -161,6 +161,14 @@ async function laadKlant(client) {
       return { client, ok: true, maand, dagen: m.dagen, netto: null, adKosten: m.adKosten, fee: m.fee };
     }
 
+    if (client.type === 'baseline') {
+      const { rows } = parseBaselineSheet(text, client);
+      if (!rows.length) throw new Error('geen datarijen');
+      const maand = kiesMaand(rows);
+      const m = computeBaselineMetrics(filterMaand(rows, maand), maand, client);
+      return { client, ok: true, maand, dagen: m.dagen, netto: m.omzetToDate, adKosten: m.adKosten, fee: m.feeNu ? m.feeNu.fee : 0 };
+    }
+
     const { rows } = parseSheet(text, client);
     if (!rows.length) throw new Error('geen datarijen');
     const maand = kiesMaand(rows);

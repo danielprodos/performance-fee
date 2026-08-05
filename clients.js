@@ -79,5 +79,21 @@ const CLIENTS = [
     csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQSxo1OIqv8q72DzQ2MfrJagtiiVA3qs3qPeZpsgNbBQf-FKu1Hbbm7L9qQmvj5y60rMAshHHW0HZfH/pub?output=csv',
     feePerUnit: 0.75 // €0,75 per Digital Purchase
     // Let op: backend/10%-regel is nog niet toegepast (v1 op GA4 DigitalPurchases).
+  },
+  {
+    // Fee o.b.v. omzet t.o.v. de 2025-baseline per kalendermaand.
+    id: 'profipack',
+    naam: 'Profipack',
+    dashboard: 'dashboards/profipack.html',
+    type: 'baseline',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    btwTarief: 0, // omzet vergelijken op dezelfde basis als de baseline (ex btw)
+    // Baseline = "Exact omzet 100% 2025" per maand (maand-van-het-jaar 1..12)
+    baselines: {
+      1: 698927, 2: 623538, 3: 676306, 4: 676433, 5: 683697, 6: 700762,
+      7: 652821, 8: 626488, 9: 765924, 10: 888419, 11: 918502, 12: 725252
+    },
+    // Banden: 100–110% => 1%, >110% => 3%, met max €10.000 per maand.
+    fee: { drempel2: 1.00, drempel3: 1.10, rate2: 0.01, rate3: 0.03, cap: 10000 }
   }
 ];
