@@ -102,7 +102,7 @@ const CLIENTS = [
     naam: 'Financieel Fit',
     dashboard: 'dashboards/financieelfit.html',
     type: 'lead',
-    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTy3Uch2gn0psHOXsjYY2ccnwt1pQUJwHRWi1nbGzAECldsFlDzVIDhtSYbR_GMCd2bdSm1zW64E5Es/pub?output=csv',
     // Fee per lead o.b.v. CPL (kosten per lead). maxCPL is exclusief (<). Aaneengesloten.
     leadStaffel: [
       { maxCPL: 40,       fee: 17.00, label: '< €40' },
