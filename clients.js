@@ -76,7 +76,7 @@ const CLIENTS = [
     naam: 'Booklydoo',
     dashboard: 'dashboards/booklydoo.html',
     type: 'unit',
-    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQSxo1OIqv8q72DzQ2MfrJagtiiVA3qs3qPeZpsgNbBQf-FKu1Hbbm7L9qQmvj5y60rMAshHHW0HZfH/pub?output=csv',
     feePerUnit: 0.75 // €0,75 per Digital Purchase
     // Let op: backend/10%-regel is nog niet toegepast (v1 op GA4 DigitalPurchases).
   }
