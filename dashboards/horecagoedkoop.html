@@ -263,7 +263,9 @@ function render(monthRows, maandISO) {
 
   // Ad-kosten (informatief)
   document.getElementById('adValue').textContent = fmtEuro(m.adKosten);
-  document.getElementById('adSub').textContent = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  let adSub = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  if (m.totMicrosoft > 0) adSub += ` · Microsoft ${fmtEuro(m.totMicrosoft)}`;
+  document.getElementById('adSub').textContent = adSub;
 
   // Verwachte fee (projectie naar maandeinde)
   document.getElementById('feeVerwValue').textContent = m.feeVerwacht ? fmtEuro(m.feeVerwacht.fee) : '—';

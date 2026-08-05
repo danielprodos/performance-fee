@@ -261,7 +261,9 @@ function render(monthRows, maandISO) {
 
   // Ad-kosten
   document.getElementById('adValue').textContent = fmtEuro(m.adKosten);
-  document.getElementById('adSub').textContent = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  let adSub = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  if (m.totMicrosoft > 0) adSub += ` · Microsoft ${fmtEuro(m.totMicrosoft)}`;
+  document.getElementById('adSub').textContent = adSub;
 
   // Performance fee (gerealiseerd)
   document.getElementById('feeValue').textContent = m.feeNu ? fmtEuro(m.feeNu.fee) : '—';

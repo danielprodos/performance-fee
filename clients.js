@@ -86,7 +86,7 @@ const CLIENTS = [
     naam: 'Profipack',
     dashboard: 'dashboards/profipack.html',
     type: 'baseline',
-    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRla9Y_woHI3jytPJUz14CNgYA40RQmA5JaM79OKxg6pwHX2uhl_WpicwIBO7JVpekgIYcGZF4lKSzj/pub?output=csv',
     btwTarief: 0, // omzet vergelijken op dezelfde basis als de baseline (ex btw)
     // Baseline = "Exact omzet 100% 2025" per maand (maand-van-het-jaar 1..12)
     baselines: {

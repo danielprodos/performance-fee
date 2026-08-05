@@ -204,7 +204,9 @@ function render(monthRows, maandISO) {
   document.getElementById('feeSub').textContent = `${fmtEuro(m.feePerUnit)} × ${fmtGetal(m.totUnits)} gebruikers`;
 
   document.getElementById('adValue').textContent = fmtEuro(m.adKosten);
-  document.getElementById('adSub').textContent = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  let adSub = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+  if (m.totMicrosoft > 0) adSub += ` · Microsoft ${fmtEuro(m.totMicrosoft)}`;
+  document.getElementById('adSub').textContent = adSub;
 
   document.getElementById('cpuValue').textContent = m.kostenPerUnit != null ? fmtEuro(m.kostenPerUnit) : '—';
   document.getElementById('cpuSub').textContent = 'gem. ad-kosten per nieuwe gebruiker';

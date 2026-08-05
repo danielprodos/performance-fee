@@ -155,9 +155,10 @@ function parseCmsSheet(text, config) {
   let iCms = header.indexOf(normHeader(kolom));
   if (iCms === -1) iCms = 1; // fallback: tweede kolom
   // Optionele ad-kosten-kolommen (informatief; niet in de fee).
-  const iMeta = header.indexOf(normHeader(KOLOMMEN.meta));
-  const iGoogle = header.indexOf(normHeader(KOLOMMEN.google));
-  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1;
+  const iMeta = header.findIndex(h => h.includes('meta'));
+  const iGoogle = header.findIndex(h => h.includes('google'));
+  const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1 || iMicrosoft !== -1;
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === '') continue;
@@ -168,7 +169,8 @@ function parseCmsSheet(text, config) {
       datum,
       cmsInclBtw: parseBedrag(cols[iCms]),
       meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
-      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle])
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft])
     });
   }
   rows.sort((a, b) => a.datum.localeCompare(b.datum));
@@ -211,7 +213,8 @@ function computeHorecaMetrics(monthRows, maandISO, config) {
   // Ad-kosten (informatief; niet in de fee-berekening).
   const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
   const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
-  const adKosten = totMeta + totGoogle;
+  const totMicrosoft = monthRows.reduce((s, r) => s + (r.microsoft || 0), 0);
+  const adKosten = totMeta + totGoogle + totMicrosoft;
 
   const dim = dagenInMaand(maandISO);
   // Alleen dagen mét ingevulde data tellen mee (voor-ingevulde lege rijen negeren).
@@ -229,7 +232,7 @@ function computeHorecaMetrics(monthRows, maandISO, config) {
   return {
     targetIncl, targetNetto, btw,
     actualInclToDate, actualNettoToDate, actualExBtw,
-    totMeta, totGoogle, adKosten,
+    totMeta, totGoogle, totMicrosoft, adKosten,
     dagen, dagenVerstreken, dagenInMaand: dim,
     projectedIncl, projectedNetto,
     feeNu, feeVerwacht,
@@ -255,7 +258,8 @@ function parseUnitSheet(text, config) {
   const iUnits = header.findIndex(h => h.includes('purchase') || h.includes('aankop') || h.includes('betalende') || h.includes('gebruiker'));
   const iMeta = header.findIndex(h => h.includes('meta'));
   const iGoogle = header.findIndex(h => h.includes('google'));
-  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1;
+  const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1 || iMicrosoft !== -1;
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === '') continue;
@@ -266,7 +270,8 @@ function parseUnitSheet(text, config) {
       datum,
       units: iUnits === -1 ? 0 : Math.round(parseBedrag(cols[iUnits])),
       meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
-      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle])
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft])
     });
   }
   rows.sort((a, b) => a.datum.localeCompare(b.datum));
@@ -278,7 +283,8 @@ function computeUnitMetrics(monthRows, maandISO, config) {
   const totUnits = monthRows.reduce((s, r) => s + (r.units || 0), 0);
   const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
   const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
-  const adKosten = totMeta + totGoogle;
+  const totMicrosoft = monthRows.reduce((s, r) => s + (r.microsoft || 0), 0);
+  const adKosten = totMeta + totGoogle + totMicrosoft;
   const fee = feePerUnit * totUnits;
 
   const rijenMetData = monthRows.filter(r => (r.units || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0);
@@ -286,7 +292,7 @@ function computeUnitMetrics(monthRows, maandISO, config) {
   const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
 
   return {
-    totUnits, fee, feePerUnit, totMeta, totGoogle, adKosten,
+    totUnits, fee, feePerUnit, totMeta, totGoogle, totMicrosoft, adKosten,
     kostenPerUnit: totUnits > 0 ? adKosten / totUnits : null,
     dagen, dagenVerstreken, dagenInMaand: dagenInMaand(maandISO),
     eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
@@ -310,13 +316,14 @@ function parseBaselineSheet(text, config) {
   const kolomDatum = iDatum === -1 ? 0 : iDatum;
   const iMeta = header.findIndex(h => h.includes('meta'));
   const iGoogle = header.findIndex(h => h.includes('google'));
+  const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
   let iOmzet = header.findIndex(h => h.includes('omzet') || h.includes('revenue') || h.includes('turnover'));
   if (iOmzet === -1) {
     for (let j = 0; j < header.length; j++) {
-      if (j !== kolomDatum && j !== iMeta && j !== iGoogle && header[j] !== '') { iOmzet = j; break; }
+      if (j !== kolomDatum && j !== iMeta && j !== iGoogle && j !== iMicrosoft && header[j] !== '') { iOmzet = j; break; }
     }
   }
-  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1;
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1 || iMicrosoft !== -1;
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === '') continue;
@@ -327,7 +334,8 @@ function parseBaselineSheet(text, config) {
       datum,
       omzet: iOmzet === -1 ? 0 : parseBedrag(cols[iOmzet]),
       meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
-      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle])
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft])
     });
   }
   rows.sort((a, b) => a.datum.localeCompare(b.datum));
@@ -348,7 +356,8 @@ function computeBaselineMetrics(monthRows, maandISO, config) {
   const omzetToDate = monthRows.reduce((s, r) => s + (r.omzet || 0), 0) / (1 + btw);
   const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
   const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
-  const adKosten = totMeta + totGoogle;
+  const totMicrosoft = monthRows.reduce((s, r) => s + (r.microsoft || 0), 0);
+  const adKosten = totMeta + totGoogle + totMicrosoft;
 
   function feeVoor(omzet) {
     if (baseline == null) return null;
@@ -361,14 +370,14 @@ function computeBaselineMetrics(monthRows, maandISO, config) {
   }
 
   const dim = dagenInMaand(maandISO);
-  const rijenMetData = monthRows.filter(r => (r.omzet || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0);
+  const rijenMetData = monthRows.filter(r => (r.omzet || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0 || (r.microsoft || 0) > 0);
   const dagen = rijenMetData.length;
   const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
   const projectedOmzet = dagenVerstreken > 0 ? omzetToDate / dagenVerstreken * dim : 0;
 
   return {
     baseline, btw, drempel2, drempel3, rate2, rate3, cap,
-    omzetToDate, projectedOmzet, totMeta, totGoogle, adKosten,
+    omzetToDate, projectedOmzet, totMeta, totGoogle, totMicrosoft, adKosten,
     feeNu: feeVoor(omzetToDate), feeVerwacht: feeVoor(projectedOmzet),
     pctVanBaseline: baseline ? omzetToDate / baseline * 100 : null,
     projectiePct: baseline ? projectedOmzet / baseline * 100 : null,
