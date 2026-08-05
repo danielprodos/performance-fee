@@ -150,7 +150,7 @@ async function laadKlant(client) {
       if (!rows.length) throw new Error('geen datarijen');
       const maand = kiesMaand(rows);
       const m = computeHorecaMetrics(filterMaand(rows, maand), maand, client);
-      return { client, ok: true, maand, dagen: m.dagen, netto: m.actualExBtw, adKosten: null, fee: m.feeNu ? m.feeNu.fee : 0 };
+      return { client, ok: true, maand, dagen: m.dagen, netto: m.actualExBtw, adKosten: m.adKosten, fee: m.feeNu ? m.feeNu.fee : 0 };
     }
 
     const { rows } = parseSheet(text, client);
