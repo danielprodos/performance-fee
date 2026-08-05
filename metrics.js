@@ -240,6 +240,60 @@ function computeHorecaMetrics(monthRows, maandISO, config) {
   };
 }
 
+/* ---------- Booklydoo: fee per betalende gebruiker ----------
+   Fee = feePerUnit (€0,75) × aantal Digital Purchases (GA4) in de maand.
+   Kolommen worden flexibel op trefwoord herkend (meta / google / purchase),
+   zodat kleine naamverschillen ('Meta ad kosten' vs 'Meta Ads kosten') werken.
+   (De backend/10%-regel is bewust nog niet toegepast — later toe te voegen.)
+*/
+function parseUnitSheet(text, config) {
+  const lines = String(text).split(/\r?\n/);
+  if (!lines.length) return { rows: [], heeftAdKosten: false };
+  const header = splitCsvLine(lines[0]).map(normHeader);
+  const iDatum = header.findIndex(h => h.includes('datum'));
+  const kolomDatum = iDatum === -1 ? 0 : iDatum;
+  const iUnits = header.findIndex(h => h.includes('purchase') || h.includes('aankop') || h.includes('betalende') || h.includes('gebruiker'));
+  const iMeta = header.findIndex(h => h.includes('meta'));
+  const iGoogle = header.findIndex(h => h.includes('google'));
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1;
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[kolomDatum]);
+    if (!datum) continue;
+    rows.push({
+      datum,
+      units: iUnits === -1 ? 0 : Math.round(parseBedrag(cols[iUnits])),
+      meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle])
+    });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return { rows, heeftAdKosten };
+}
+
+function computeUnitMetrics(monthRows, maandISO, config) {
+  const feePerUnit = (config && config.feePerUnit != null) ? config.feePerUnit : 0.75;
+  const totUnits = monthRows.reduce((s, r) => s + (r.units || 0), 0);
+  const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
+  const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
+  const adKosten = totMeta + totGoogle;
+  const fee = feePerUnit * totUnits;
+
+  const rijenMetData = monthRows.filter(r => (r.units || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0);
+  const dagen = rijenMetData.length;
+  const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
+
+  return {
+    totUnits, fee, feePerUnit, totMeta, totGoogle, adKosten,
+    kostenPerUnit: totUnits > 0 ? adKosten / totUnits : null,
+    dagen, dagenVerstreken, dagenInMaand: dagenInMaand(maandISO),
+    eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (monthRows.length ? monthRows[monthRows.length - 1].datum : null)
+  };
+}
+
 // ---------- Maanden ----------
 // Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
 // hieronder filteren/kiezen we de juiste maand.

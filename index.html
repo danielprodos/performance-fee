@@ -153,6 +153,14 @@ async function laadKlant(client) {
       return { client, ok: true, maand, dagen: m.dagen, netto: m.actualExBtw, adKosten: m.adKosten, fee: m.feeNu ? m.feeNu.fee : 0 };
     }
 
+    if (client.type === 'unit') {
+      const { rows } = parseUnitSheet(text, client);
+      if (!rows.length) throw new Error('geen datarijen');
+      const maand = kiesMaand(rows);
+      const m = computeUnitMetrics(filterMaand(rows, maand), maand, client);
+      return { client, ok: true, maand, dagen: m.dagen, netto: null, adKosten: m.adKosten, fee: m.fee };
+    }
+
     const { rows } = parseSheet(text, client);
     if (!rows.length) throw new Error('geen datarijen');
     const maand = kiesMaand(rows);
@@ -192,7 +200,7 @@ function render(results) {
           <div class="periode">${periode}</div>
         </div>
         <div class="metrics-row">
-          ${metricBlok('Netto inkomsten', fmtEuro(res.netto))}
+          ${metricBlok('Netto inkomsten', res.netto != null ? fmtEuro(res.netto) : 'n.v.t.')}
           ${metricBlok('Ad-kosten', res.adKosten != null ? fmtEuro(res.adKosten) : 'n.v.t.')}
           ${metricBlok('Performance fee', fmtEuro(res.fee), 'fee')}
         </div>`;

@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Booklydoo — performance dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../metrics.js"></script>
+<script src="../clients.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); --accent: #2563eb;
+    --red: #dc2626; --red-bg: #fee2e2; --grid: rgba(0,0,0,0.06);
+    --prodos-blue: #234B96; --prodos-green: #2EE86F; --fee-accent: #234B96;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac; --border: #2a2e37;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6; --red: #f87171; --red-bg: #3a1518;
+      --grid: rgba(255,255,255,0.07); --fee-accent: #2EE86F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac; --border: #2a2e37;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6; --red: #f87171; --red-bg: #3a1518;
+    --grid: rgba(255,255,255,0.07); --fee-accent: #2EE86F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+  header { margin-bottom: 24px; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; }
+  header .period { color: var(--muted); font-size: 14px; }
+  .theme-switch {
+    display: inline-flex; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; box-shadow: var(--shadow); flex-shrink: 0;
+  }
+  .theme-switch button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+    font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button.active { background: var(--accent); color: #fff; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .maand-select {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600;
+    box-shadow: var(--shadow); cursor: pointer;
+  }
+  header .client-tag {
+    display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+  }
+  header .client-tag a { color: inherit; text-decoration: none; }
+  header .client-tag a:hover { color: var(--accent); }
+
+  .kpis { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi .sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .big-card { display: flex; flex-direction: column; justify-content: center; border-width: 2px; border-color: var(--prodos-blue); }
+  .big-card .label { font-size: 14px; }
+  .big-card .value { font-size: 44px; line-height: 1; margin: 4px 0; color: var(--fee-accent); }
+  .fee-accent .value { color: var(--fee-accent); }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .chart-box { position: relative; height: 320px; }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  .banner {
+    padding: 16px 20px; border-radius: 12px; margin-bottom: 20px; font-size: 14px;
+    border: 1px solid var(--orange, #ea580c); background: rgba(234,88,12,0.08); color: #ea580c; display: none;
+  }
+  .banner.show { display: block; }
+  .note { font-size: 12px; color: var(--muted); margin: -4px 0 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===================== KLANT ===================== -->
+  <script>
+    const CONFIG = CLIENTS.find(c => c.id === 'booklydoo');
+  </script>
+  <!-- ================================================= -->
+
+  <header>
+    <div class="head-row">
+      <div>
+        <div class="client-tag"><a href="../index.html">← Prodos · consultant overzicht</a></div>
+        <h1 id="title">— performance dashboard</h1>
+        <div class="period" id="period">Data wordt geladen…</div>
+      </div>
+      <div class="controls">
+        <select id="maandSelect" class="maand-select" aria-label="Maand kiezen"></select>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
+          <button type="button" data-theme-choice="system">Systeem</button>
+          <button type="button" data-theme-choice="light">Licht</button>
+          <button type="button" data-theme-choice="dark">Donker</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div id="content" style="display:none;">
+    <div class="kpis">
+      <div class="card kpi big-card">
+        <div class="label">Nieuwe betalende gebruikers</div>
+        <div class="value" id="usersValue">—</div>
+        <div class="sub" id="usersSub">—</div>
+      </div>
+      <div class="card kpi fee-accent">
+        <div class="label">Performance fee</div>
+        <div class="value" id="feeValue">—</div>
+        <div class="sub" id="feeSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Ad-kosten (Meta + Google)</div>
+        <div class="value" id="adValue">—</div>
+        <div class="sub" id="adSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Ad-kosten per gebruiker</div>
+        <div class="value" id="cpuValue">—</div>
+        <div class="sub" id="cpuSub">—</div>
+      </div>
+    </div>
+
+    <div class="note" id="note">Fee = €0,75 per Digital Purchase (GA4).</div>
+
+    <div class="charts">
+      <div class="card chart-card">
+        <h2>Nieuwe betalende gebruikers per dag</h2>
+        <div class="chart-box"><canvas id="usersChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Ad-kosten per dag (Meta / Google)</h2>
+        <div class="chart-box"><canvas id="adChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+// Parsing/berekeningen/formatters/maanden komen uit ../metrics.js.
+const fmtGetal = (n) => new Intl.NumberFormat('nl-NL').format(Math.round(n || 0));
+
+function toonFout(msg) {
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.classList.add('show');
+  document.getElementById('period').textContent = '';
+}
+
+let lastRender = null;
+
+function render(monthRows, maandISO) {
+  document.getElementById('title').textContent = `${CONFIG.naam} — performance dashboard`;
+  const banner = document.getElementById('banner');
+  banner.classList.remove('show');
+
+  if (!monthRows || monthRows.length === 0) {
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = maandISO ? `Geen data voor ${maandLabel(maandISO)}.` : 'Geen geldige datarijen gevonden in de sheet.';
+    banner.classList.add('show');
+    document.getElementById('period').textContent = maandISO ? maandLabel(maandISO) : '';
+    return;
+  }
+
+  const m = computeUnitMetrics(monthRows, maandISO, CONFIG);
+  if (m.dagen === 0) {
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = `Nog geen data ingevuld voor ${maandLabel(maandISO)}.`;
+    banner.classList.add('show');
+    document.getElementById('period').textContent = maandLabel(maandISO);
+    return;
+  }
+
+  document.getElementById('content').style.display = 'block';
+  lastRender = { monthRows, maandISO, m };
+
+  document.getElementById('period').textContent =
+    `${maandLabel(maandISO)} · t/m ${fmtDatumNL(m.laatste)} · dag ${m.dagenVerstreken}/${m.dagenInMaand}`;
+
+  document.getElementById('usersValue').textContent = fmtGetal(m.totUnits);
+  document.getElementById('usersSub').textContent = `${fmtEuro(m.feePerUnit)} per gebruiker`;
+
+  document.getElementById('feeValue').textContent = fmtEuro(m.fee);
+  document.getElementById('feeSub').textContent = `${fmtEuro(m.feePerUnit)} × ${fmtGetal(m.totUnits)} gebruikers`;
+
+  document.getElementById('adValue').textContent = fmtEuro(m.adKosten);
+  document.getElementById('adSub').textContent = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+
+  document.getElementById('cpuValue').textContent = m.kostenPerUnit != null ? fmtEuro(m.kostenPerUnit) : '—';
+  document.getElementById('cpuSub').textContent = 'gem. ad-kosten per nieuwe gebruiker';
+
+  document.getElementById('note').textContent =
+    `Fee = ${fmtEuro(m.feePerUnit)} per Digital Purchase (GA4). (Backend/10%-regel nog niet toegepast.)`;
+
+  renderUsersChart(monthRows, m);
+  renderAdChart(monthRows, m);
+}
+
+let usersChartObj = null, adChartObj = null;
+function chartColors() {
+  const s = getComputedStyle(document.body);
+  return {
+    text: s.getPropertyValue('--text').trim() || '#1a1d21',
+    grid: s.getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.06)',
+    blue: s.getPropertyValue('--prodos-blue').trim() || '#234B96',
+    green: s.getPropertyValue('--prodos-green').trim() || '#2EE86F'
+  };
+}
+function datadagen(monthRows, m) {
+  return monthRows.filter(r => Number(r.datum.slice(8, 10)) <= m.dagenVerstreken);
+}
+
+function renderUsersChart(monthRows, m) {
+  const c = chartColors();
+  const rows = datadagen(monthRows, m);
+  if (usersChartObj) usersChartObj.destroy();
+  usersChartObj = new Chart(document.getElementById('usersChart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => fmtDatumNL(r.datum)),
+      datasets: [{ label: 'Betalende gebruikers', data: rows.map(r => r.units), backgroundColor: c.blue, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtGetal(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, precision: 0 }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderAdChart(monthRows, m) {
+  const c = chartColors();
+  const rows = datadagen(monthRows, m);
+  if (adChartObj) adChartObj.destroy();
+  adChartObj = new Chart(document.getElementById('adChart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => fmtDatumNL(r.datum)),
+      datasets: [
+        { label: 'Meta', data: rows.map(r => r.meta), backgroundColor: c.blue, borderRadius: 4 },
+        { label: 'Google', data: rows.map(r => r.google), backgroundColor: c.green, borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, callback: (v) => euro.format(v).replace(/,00$/, '') }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ---------- Data laden ----------
+let alleRijen = [];
+
+async function laadData() {
+  document.getElementById('footer').textContent = 'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
+  if (!CONFIG.csvUrl) {
+    toonFout('Sheet nog niet gekoppeld — voeg de gepubliceerde CSV-link toe bij deze klant in clients.js.');
+    document.getElementById('maandSelect').style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch(CONFIG.csvUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    alleRijen = parseUnitSheet(text, CONFIG).rows;
+    vulMaandKiezer();
+  } catch (err) {
+    console.error(err);
+    toonFout('Kon de data niet ophalen — controleer of de sheet gepubliceerd is en de link klopt.');
+  }
+}
+
+function vulMaandKiezer() {
+  const sel = document.getElementById('maandSelect');
+  const maanden = beschikbareMaanden(alleRijen);
+  if (!maanden.length) { render([], null); return; }
+  sel.innerHTML = maanden.slice().reverse().map(mm => `<option value="${mm}">${maandLabel(mm)}</option>`).join('');
+  const standaard = kiesMaand(alleRijen);
+  sel.value = standaard;
+  sel.onchange = () => toonMaand(sel.value);
+  toonMaand(standaard);
+}
+function toonMaand(maandISO) { render(filterMaand(alleRijen, maandISO), maandISO); }
+
+// ---------- Thema-schakelaar ----------
+const THEME_KEY = 'prodos-theme';
+function redrawCharts() {
+  if (lastRender) { renderUsersChart(lastRender.monthRows, lastRender.m); renderAdChart(lastRender.monthRows, lastRender.m); }
+}
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'light' || choice === 'dark') root.setAttribute('data-theme', choice);
+  else root.removeAttribute('data-theme');
+  document.querySelectorAll('#themeSwitch button').forEach(b => b.classList.toggle('active', b.dataset.themeChoice === choice));
+  redrawCharts();
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  const choice = saved || 'system';
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.addEventListener('click', () => {
+      const c = b.dataset.themeChoice;
+      try { localStorage.setItem(THEME_KEY, c); } catch (e) {}
+      applyTheme(c);
+    }));
+  applyTheme(choice);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!document.documentElement.hasAttribute('data-theme')) redrawCharts();
+  });
+})();
+
+laadData();
+</script>
+</body>
+</html>

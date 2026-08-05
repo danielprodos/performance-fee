@@ -69,5 +69,15 @@ const CLIENTS = [
     },
     // Fee-banden op doelbereik (van 'CMS − retour & emballage')
     feeBanden: { band2: 0.012, band3: 0.02 } // 50–100%: 1,2% · >100%: 2%
+  },
+  {
+    // Fee per betalende gebruiker (Digital Purchases uit GA4).
+    id: 'booklydoo',
+    naam: 'Booklydoo',
+    dashboard: 'dashboards/booklydoo.html',
+    type: 'unit',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    feePerUnit: 0.75 // €0,75 per Digital Purchase
+    // Let op: backend/10%-regel is nog niet toegepast (v1 op GA4 DigitalPurchases).
   }
 ];
