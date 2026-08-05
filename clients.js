@@ -57,8 +57,8 @@ const CLIENTS = [
     naam: 'Horecagoedkoop',
     dashboard: 'dashboards/horecagoedkoop.html',
     type: 'cms',
-    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
-    cmsKolom: 'CMS incl. btw', // dagkolom in de sheet
+    csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2OmTqM4DzXSN3Mi9vP5tLRZo067--q3SZS-HnzqdACn0LkmYP3_E91zNLmV57F2EDKghjmPuP456P/pub?output=csv',
+    cmsKolom: 'CMS incl btw', // dagkolom in de sheet (exacte header)
     btwTarief: 0.21,           // CMS ex btw = incl ÷ 1,21
     retourEmballage: 0.20,     // "− retour & emballage" = ex btw × 0,80
     // Maandtargets = CMS incl. btw per maand

@@ -148,22 +148,31 @@ function computeMetrics(rows, config) {
 function parseCmsSheet(text, config) {
   const kolom = (config && config.cmsKolom) || 'CMS incl. btw';
   const lines = String(text).split(/\r?\n/);
-  if (!lines.length) return { rows: [] };
+  if (!lines.length) return { rows: [], heeftAdKosten: false };
   const header = splitCsvLine(lines[0]).map(normHeader);
   const iDatum = header.indexOf(normHeader('Datum'));
   const kolomDatum = iDatum === -1 ? 0 : iDatum;
   let iCms = header.indexOf(normHeader(kolom));
   if (iCms === -1) iCms = 1; // fallback: tweede kolom
+  // Optionele ad-kosten-kolommen (informatief; niet in de fee).
+  const iMeta = header.indexOf(normHeader(KOLOMMEN.meta));
+  const iGoogle = header.indexOf(normHeader(KOLOMMEN.google));
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1;
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === '') continue;
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    rows.push({ datum, cmsInclBtw: parseBedrag(cols[iCms]) });
+    rows.push({
+      datum,
+      cmsInclBtw: parseBedrag(cols[iCms]),
+      meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle])
+    });
   }
   rows.sort((a, b) => a.datum.localeCompare(b.datum));
-  return { rows };
+  return { rows, heeftAdKosten };
 }
 
 function cmsNaRetour(inclBtw, config) {
@@ -199,11 +208,18 @@ function computeHorecaMetrics(monthRows, maandISO, config) {
   const actualNettoToDate = cmsNaRetour(actualInclToDate, config);
   const actualExBtw = actualInclToDate / (1 + btw);
 
-  const dagen = monthRows.length;
-  const dim = dagenInMaand(maandISO);
-  const dagenVerstreken = dagen ? Number(monthRows[dagen - 1].datum.slice(8, 10)) : 0; // dag-van-maand laatste rij
+  // Ad-kosten (informatief; niet in de fee-berekening).
+  const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
+  const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
+  const adKosten = totMeta + totGoogle;
 
-  // Projectie: extrapoleer de pace naar het maandeinde.
+  const dim = dagenInMaand(maandISO);
+  // Alleen dagen mét ingevulde data tellen mee (voor-ingevulde lege rijen negeren).
+  const rijenMetData = monthRows.filter(r => r.cmsInclBtw > 0);
+  const dagen = rijenMetData.length;
+  const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
+
+  // Projectie: extrapoleer de pace naar het maandeinde (o.b.v. dagen mét data).
   const projectedIncl = dagenVerstreken > 0 ? actualInclToDate / dagenVerstreken * dim : 0;
   const projectedNetto = cmsNaRetour(projectedIncl, config);
 
@@ -213,13 +229,14 @@ function computeHorecaMetrics(monthRows, maandISO, config) {
   return {
     targetIncl, targetNetto, btw,
     actualInclToDate, actualNettoToDate, actualExBtw,
+    totMeta, totGoogle, adKosten,
     dagen, dagenVerstreken, dagenInMaand: dim,
     projectedIncl, projectedNetto,
     feeNu, feeVerwacht,
     behaaldPct: targetNetto ? (actualNettoToDate / targetNetto * 100) : null,
     projectiePct: targetNetto ? (projectedNetto / targetNetto * 100) : null,
-    eerste: dagen ? monthRows[0].datum : null,
-    laatste: dagen ? monthRows[dagen - 1].datum : null
+    eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (monthRows.length ? monthRows[monthRows.length - 1].datum : null)
   };
 }
 

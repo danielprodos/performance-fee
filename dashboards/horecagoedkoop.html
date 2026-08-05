@@ -62,9 +62,10 @@
   header .client-tag a { color: inherit; text-decoration: none; }
   header .client-tag a:hover { color: var(--accent); }
 
-  .kpis { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-  @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
+  .kpis { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 1000px) { .kpis { grid-template-columns: 1fr 1fr 1fr; } }
+  @media (max-width: 680px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 460px) { .kpis { grid-template-columns: 1fr; } }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
   .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
@@ -156,6 +157,11 @@
         <div class="value" id="cmsValue">—</div>
         <div class="sub" id="cmsSub">—</div>
       </div>
+      <div class="card kpi">
+        <div class="label">Ad-kosten (Meta + Google)</div>
+        <div class="value" id="adValue">—</div>
+        <div class="sub" id="adSub">—</div>
+      </div>
       <div class="card kpi fee-accent">
         <div class="label">Verwachte fee (maand)</div>
         <div class="value" id="feeVerwValue">—</div>
@@ -213,8 +219,16 @@ function render(monthRows, maandISO) {
     return;
   }
 
-  document.getElementById('content').style.display = 'block';
   const m = computeHorecaMetrics(monthRows, maandISO, CONFIG);
+  if (m.dagen === 0) {
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = `Nog geen data ingevuld voor ${maandLabel(maandISO)}.`;
+    banner.classList.add('show');
+    document.getElementById('period').textContent = maandLabel(maandISO);
+    return;
+  }
+
+  document.getElementById('content').style.display = 'block';
   lastRender = { monthRows, maandISO, m };
 
   document.getElementById('period').textContent =
@@ -247,6 +261,10 @@ function render(monthRows, maandISO) {
     ? `Target ${fmtEuro(m.targetNetto)} · CMS ex btw ${fmtEuro(m.actualExBtw)}`
     : `CMS ex btw ${fmtEuro(m.actualExBtw)}`;
 
+  // Ad-kosten (informatief)
+  document.getElementById('adValue').textContent = fmtEuro(m.adKosten);
+  document.getElementById('adSub').textContent = `Meta ${fmtEuro(m.totMeta)} · Google ${fmtEuro(m.totGoogle)}`;
+
   // Verwachte fee (projectie naar maandeinde)
   document.getElementById('feeVerwValue').textContent = m.feeVerwacht ? fmtEuro(m.feeVerwacht.fee) : '—';
   document.getElementById('feeVerwSub').textContent = m.projectiePct != null
@@ -259,7 +277,7 @@ function render(monthRows, maandISO) {
 
   renderBanden(m);
   renderCmsChart(monthRows, m, maandISO);
-  renderDailyCmsChart(monthRows);
+  renderDailyCmsChart(monthRows, m);
 }
 
 function renderBanden(m) {
@@ -372,9 +390,11 @@ function renderCmsChart(monthRows, m, maandISO) {
   });
 }
 
-function renderDailyCmsChart(monthRows) {
+function renderDailyCmsChart(monthRows, m) {
   const c = chartColors();
-  const labels = monthRows.map(r => fmtDatumNL(r.datum));
+  // Alleen dagen t/m de laatste dag mét data tonen (geen lege voor-ingevulde rijen).
+  const rows = monthRows.filter(r => Number(r.datum.slice(8, 10)) <= m.dagenVerstreken);
+  const labels = rows.map(r => fmtDatumNL(r.datum));
   if (dailyCmsChartObj) dailyCmsChartObj.destroy();
   dailyCmsChartObj = new Chart(document.getElementById('dailyCmsChart'), {
     type: 'bar',
@@ -382,7 +402,7 @@ function renderDailyCmsChart(monthRows) {
       labels,
       datasets: [{
         label: 'CMS − retour & emballage',
-        data: monthRows.map(r => cmsNaRetour(r.cmsInclBtw, CONFIG)),
+        data: rows.map(r => cmsNaRetour(r.cmsInclBtw, CONFIG)),
         backgroundColor: c.blue, borderRadius: 4
       }]
     },
