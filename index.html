@@ -169,6 +169,14 @@ async function laadKlant(client) {
       return { client, ok: true, maand, dagen: m.dagen, netto: m.omzetToDate, adKosten: m.adKosten, fee: m.feeNu ? m.feeNu.fee : 0 };
     }
 
+    if (client.type === 'lead') {
+      const { rows } = parseLeadSheet(text, client);
+      if (!rows.length) throw new Error('geen datarijen');
+      const maand = kiesMaand(rows);
+      const m = computeLeadMetrics(filterMaand(rows, maand), maand, client);
+      return { client, ok: true, maand, dagen: m.dagen, netto: null, adKosten: m.adKosten, fee: m.fee };
+    }
+
     const { rows } = parseSheet(text, client);
     if (!rows.length) throw new Error('geen datarijen');
     const maand = kiesMaand(rows);

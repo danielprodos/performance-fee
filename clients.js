@@ -95,5 +95,23 @@ const CLIENTS = [
     },
     // Banden: 100–110% => 1%, >110% => 3%, met max €10.000 per maand.
     fee: { drempel2: 1.00, drempel3: 1.10, rate2: 0.01, rate3: 0.03, cap: 10000 }
+  },
+  {
+    // Fee per lead; fee/lead o.b.v. kosten-per-lead (CPL). 50% korting op eerste 125 leads.
+    id: 'financieelfit',
+    naam: 'Financieel Fit',
+    dashboard: 'dashboards/financieelfit.html',
+    type: 'lead',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    // Fee per lead o.b.v. CPL (kosten per lead). maxCPL is exclusief (<). Aaneengesloten.
+    leadStaffel: [
+      { maxCPL: 40,       fee: 17.00, label: '< €40' },
+      { maxCPL: 65,       fee: 14.50, label: '€40–€64' },
+      { maxCPL: 96,       fee: 12.00, label: '€65–€95' },
+      { maxCPL: 111,      fee: 10.00, label: '€96–€110' },
+      { maxCPL: Infinity, fee: 8.00,  label: '≥ €111' }
+    ],
+    kortingLeads: 125, // eerste 125 leads
+    kortingPct: 0.5    // 50% korting op de fee/lead
   }
 ];

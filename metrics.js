@@ -387,6 +387,89 @@ function computeBaselineMetrics(monthRows, maandISO, config) {
   };
 }
 
+/* ---------- Financieel Fit: fee per lead ----------
+   Fee/lead hangt af van de kosten-per-lead (CPL = beheerde ad-kosten ÷ leads).
+   Eerste `kortingLeads` (125) leads: `kortingPct` (50%) korting op de fee/lead.
+   Fee = min(leads,125) × fee/lead × (1−korting) + max(leads−125,0) × fee/lead.
+*/
+function feePerLead(cpl, staffel) {
+  for (const t of staffel) { if (cpl < t.maxCPL) return t; }
+  return staffel[staffel.length - 1];
+}
+
+function parseLeadSheet(text, config) {
+  const lines = String(text).split(/\r?\n/);
+  if (!lines.length) return { rows: [], heeftAdKosten: false };
+  const header = splitCsvLine(lines[0]).map(normHeader);
+  const iDatum = header.findIndex(h => h.includes('datum'));
+  const kolomDatum = iDatum === -1 ? 0 : iDatum;
+  const iLeads = header.findIndex(h => h.includes('lead'));
+  const iMeta = header.findIndex(h => h.includes('meta'));
+  const iGoogle = header.findIndex(h => h.includes('google'));
+  const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1 || iMicrosoft !== -1;
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[kolomDatum]);
+    if (!datum) continue;
+    rows.push({
+      datum,
+      leads: iLeads === -1 ? 0 : Math.round(parseBedrag(cols[iLeads])),
+      meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft])
+    });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return { rows, heeftAdKosten };
+}
+
+function leadFeeBerekening(leads, cpl, config) {
+  const staffel = config.leadStaffel;
+  const tred = (cpl != null && leads > 0) ? feePerLead(cpl, staffel) : null;
+  const fpl = tred ? tred.fee : 0;
+  const kortingN = config.kortingLeads != null ? config.kortingLeads : 125;
+  const kortingPct = config.kortingPct != null ? config.kortingPct : 0.5;
+  const kortingLeads = Math.min(leads, kortingN);
+  const volleLeads = Math.max(leads - kortingN, 0);
+  const feeKorting = kortingLeads * fpl * (1 - kortingPct);
+  const feeVol = volleLeads * fpl;
+  return { tred, fpl, kortingLeads, volleLeads, feeKorting, feeVol, fee: feeKorting + feeVol };
+}
+
+function computeLeadMetrics(monthRows, maandISO, config) {
+  const totLeads = monthRows.reduce((s, r) => s + (r.leads || 0), 0);
+  const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
+  const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
+  const totMicrosoft = monthRows.reduce((s, r) => s + (r.microsoft || 0), 0);
+  const adKosten = totMeta + totGoogle + totMicrosoft;
+  const cpl = totLeads > 0 ? adKosten / totLeads : null;
+
+  const berekening = leadFeeBerekening(totLeads, cpl, config);
+
+  const dim = dagenInMaand(maandISO);
+  const rijenMetData = monthRows.filter(r => (r.leads || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0 || (r.microsoft || 0) > 0);
+  const dagen = rijenMetData.length;
+  const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
+  // Projectie: leads/ad-kosten extrapoleren; CPL blijft (schaalt lineair) => zelfde tier.
+  const projLeads = dagenVerstreken > 0 ? Math.round(totLeads / dagenVerstreken * dim) : 0;
+  const berekeningVerwacht = leadFeeBerekening(projLeads, cpl, config);
+
+  return {
+    totLeads, adKosten, totMeta, totGoogle, totMicrosoft, cpl,
+    tred: berekening.tred, feePerLead: berekening.fpl,
+    kortingLeads: berekening.kortingLeads, volleLeads: berekening.volleLeads,
+    feeKorting: berekening.feeKorting, feeVol: berekening.feeVol, fee: berekening.fee,
+    projLeads, feeVerwacht: berekeningVerwacht.fee,
+    kostenPerLead: cpl,
+    dagen, dagenVerstreken, dagenInMaand: dim,
+    eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (monthRows.length ? monthRows[monthRows.length - 1].datum : null)
+  };
+}
+
 // ---------- Maanden ----------
 // Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
 // hieronder filteren/kiezen we de juiste maand.
