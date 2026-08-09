@@ -120,7 +120,7 @@ const CLIENTS = [
     naam: 'Vi Lifestyle',
     dashboard: 'dashboards/vilifestyle.html',
     type: 'deals',
-    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTe5R4EVsjl2RYVdC4lIzbwS7AtadnvjAmXJ0W2gjKFImbStjZfJWKlwk7J6BkPLWJSPAMSHPlbLN0Y/pub?output=csv',
     feePerNew: 30,       // € per new deal boven de drempel
     feePerRevived: 10,   // € per revived deal
     newDrempel: 75,      // drempel new business (3-maands gem., voorlopig vast)
