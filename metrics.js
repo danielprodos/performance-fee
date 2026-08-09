@@ -470,6 +470,101 @@ function computeLeadMetrics(monthRows, maandISO, config) {
   };
 }
 
+/* ---------- Vi Lifestyle: new + revived deals ----------
+   Fee = €30 per new deal boven de maanddrempel (75) + €10 per revived deal,
+   daarna vermenigvuldigd met een CPL-modifier:
+     CPL < €250   -> +25%  (×1,25)
+     €250–€350    -> normaal (×1,00)
+     €350–€500    -> −25%  (×0,75)
+     > €500       -> −50%  (×0,50)
+   CPL = beheerde ad-kosten ÷ new deals (config.cplBasis: 'new' | 'all' | 'leads').
+*/
+function cplModifier(cpl, staffel) {
+  for (const t of staffel) { if (cpl < t.maxCPL) return t; }
+  return staffel[staffel.length - 1];
+}
+
+function parseDealsSheet(text, config) {
+  const lines = String(text).split(/\r?\n/);
+  if (!lines.length) return { rows: [], heeftAdKosten: false };
+  const header = splitCsvLine(lines[0]).map(normHeader);
+  const iDatum = header.findIndex(h => h.includes('datum'));
+  const kolomDatum = iDatum === -1 ? 0 : iDatum;
+  const iNew = header.findIndex(h => h.includes('new'));
+  const iRevived = header.findIndex(h => h.includes('revived') || h.includes('reactiv') || h.includes('herleef'));
+  const iLeads = header.findIndex(h => h.includes('lead'));
+  const iMeta = header.findIndex(h => h.includes('meta'));
+  const iGoogle = header.findIndex(h => h.includes('google'));
+  const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1 || iMicrosoft !== -1;
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[kolomDatum]);
+    if (!datum) continue;
+    rows.push({
+      datum,
+      newDeals: iNew === -1 ? 0 : Math.round(parseBedrag(cols[iNew])),
+      revived: iRevived === -1 ? 0 : Math.round(parseBedrag(cols[iRevived])),
+      leads: iLeads === -1 ? 0 : Math.round(parseBedrag(cols[iLeads])),
+      meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft])
+    });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return { rows, heeftAdKosten };
+}
+
+function dealsFee(newDeals, revived, cpl, config) {
+  const feeNew = (config.feePerNew != null ? config.feePerNew : 30);
+  const feeRev = (config.feePerRevived != null ? config.feePerRevived : 10);
+  const drempel = (config.newDrempel != null ? config.newDrempel : 75);
+  const bovenDrempel = Math.max(newDeals - drempel, 0);
+  const basisNew = bovenDrempel * feeNew;
+  const basisRevived = revived * feeRev;
+  const basis = basisNew + basisRevived;
+  const mod = (cpl != null) ? cplModifier(cpl, config.cplStaffel) : null;
+  const factor = mod ? mod.mod : 1;
+  return { bovenDrempel, drempel, basisNew, basisRevived, basis, mod, factor, fee: basis * factor };
+}
+
+function computeDealsMetrics(monthRows, maandISO, config) {
+  const newDeals = monthRows.reduce((s, r) => s + (r.newDeals || 0), 0);
+  const revived = monthRows.reduce((s, r) => s + (r.revived || 0), 0);
+  const totLeads = monthRows.reduce((s, r) => s + (r.leads || 0), 0);
+  const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
+  const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
+  const totMicrosoft = monthRows.reduce((s, r) => s + (r.microsoft || 0), 0);
+  const adKosten = totMeta + totGoogle + totMicrosoft;
+
+  const basis = config.cplBasis || 'new';
+  const noemer = basis === 'all' ? (newDeals + revived) : basis === 'leads' ? totLeads : newDeals;
+  const cpl = noemer > 0 ? adKosten / noemer : null;
+
+  const berekening = dealsFee(newDeals, revived, cpl, config);
+
+  const dim = dagenInMaand(maandISO);
+  const rijenMetData = monthRows.filter(r => (r.newDeals || 0) > 0 || (r.revived || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0 || (r.microsoft || 0) > 0);
+  const dagen = rijenMetData.length;
+  const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
+  const projNew = dagenVerstreken > 0 ? Math.round(newDeals / dagenVerstreken * dim) : 0;
+  const projRevived = dagenVerstreken > 0 ? Math.round(revived / dagenVerstreken * dim) : 0;
+  const feeVerwacht = dealsFee(projNew, projRevived, cpl, config).fee;
+
+  return {
+    newDeals, revived, totLeads, adKosten, totMeta, totGoogle, totMicrosoft, cpl, cplBasis: basis,
+    drempel: berekening.drempel, bovenDrempel: berekening.bovenDrempel,
+    basisNew: berekening.basisNew, basisRevived: berekening.basisRevived, basis: berekening.basis,
+    mod: berekening.mod, factor: berekening.factor, fee: berekening.fee,
+    projNew, projRevived, feeVerwacht,
+    dagen, dagenVerstreken, dagenInMaand: dim,
+    eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (monthRows.length ? monthRows[monthRows.length - 1].datum : null)
+  };
+}
+
 // ---------- Maanden ----------
 // Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
 // hieronder filteren/kiezen we de juiste maand.

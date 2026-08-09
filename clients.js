@@ -113,5 +113,24 @@ const CLIENTS = [
     ],
     kortingLeads: 125, // eerste 125 leads
     kortingPct: 0.5    // 50% korting op de fee/lead
+  },
+  {
+    // Fee op new + revived deals, met CPL-modifier.
+    id: 'vilifestyle',
+    naam: 'Vi Lifestyle',
+    dashboard: 'dashboards/vilifestyle.html',
+    type: 'deals',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    feePerNew: 30,       // € per new deal boven de drempel
+    feePerRevived: 10,   // € per revived deal
+    newDrempel: 75,      // drempel new business (3-maands gem., voorlopig vast)
+    cplBasis: 'new',     // CPL = ad-kosten ÷ new deals ('new' | 'all' | 'leads')
+    // CPL-modifier op de totale fee. maxCPL is exclusief (<).
+    cplStaffel: [
+      { maxCPL: 250,      mod: 1.25, label: '< €250' },
+      { maxCPL: 350,      mod: 1.00, label: '€250–€350' },
+      { maxCPL: 500,      mod: 0.75, label: '€350–€500' },
+      { maxCPL: Infinity, mod: 0.50, label: '> €500' }
+    ]
   }
 ];
