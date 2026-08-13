@@ -565,6 +565,93 @@ function computeDealsMetrics(monthRows, maandISO, config) {
   };
 }
 
+/* ---------- Krediet Groep Nederland: productie-banden × ROAS ----------
+   Fee over 'productie' (bijv. maandelijkse kredietproductie) in banden,
+   daarna vermenigvuldigd met een ROAS-factor. ROAS = productie ÷ ad-kosten.
+   LET OP: de ROAS-conditie in de brief was tegenstrijdig; hier de logische
+   lezing (hoger = beter), volledig configureerbaar via config.roasBanden.
+*/
+function roasFactor(roas, banden) {
+  for (const b of banden) { if (roas >= b.minRoas) return b; }
+  return banden[banden.length - 1];
+}
+
+function productieFee(productie, banden) {
+  let fee = 0;
+  const perBand = banden.map(b => {
+    const bedrag = Math.max(0, Math.min(productie, b.tot) - b.van);
+    const f = bedrag * b.rate;
+    fee += f;
+    return { van: b.van, tot: b.tot, rate: b.rate, bedrag, fee: f };
+  });
+  return { fee, perBand };
+}
+
+function parseProductionSheet(text, config) {
+  const lines = String(text).split(/\r?\n/);
+  if (!lines.length) return { rows: [], heeftAdKosten: false };
+  const header = splitCsvLine(lines[0]).map(normHeader);
+  const iDatum = header.findIndex(h => h.includes('datum'));
+  const kolomDatum = iDatum === -1 ? 0 : iDatum;
+  const iMeta = header.findIndex(h => h.includes('meta'));
+  const iGoogle = header.findIndex(h => h.includes('google'));
+  const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
+  let iProd = header.findIndex(h => h.includes('productie') || h.includes('production') || h.includes('omzet'));
+  if (iProd === -1) {
+    for (let j = 0; j < header.length; j++) {
+      if (j !== kolomDatum && j !== iMeta && j !== iGoogle && j !== iMicrosoft && header[j] !== '') { iProd = j; break; }
+    }
+  }
+  const heeftAdKosten = iMeta !== -1 || iGoogle !== -1 || iMicrosoft !== -1;
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue;
+    const cols = splitCsvLine(lines[i]);
+    const datum = parseDatum(cols[kolomDatum]);
+    if (!datum) continue;
+    rows.push({
+      datum,
+      productie: iProd === -1 ? 0 : parseBedrag(cols[iProd]),
+      meta: iMeta === -1 ? 0 : parseBedrag(cols[iMeta]),
+      google: iGoogle === -1 ? 0 : parseBedrag(cols[iGoogle]),
+      microsoft: iMicrosoft === -1 ? 0 : parseBedrag(cols[iMicrosoft])
+    });
+  }
+  rows.sort((a, b) => a.datum.localeCompare(b.datum));
+  return { rows, heeftAdKosten };
+}
+
+function computeProductionMetrics(monthRows, maandISO, config) {
+  const productie = monthRows.reduce((s, r) => s + (r.productie || 0), 0);
+  const totMeta = monthRows.reduce((s, r) => s + (r.meta || 0), 0);
+  const totGoogle = monthRows.reduce((s, r) => s + (r.google || 0), 0);
+  const totMicrosoft = monthRows.reduce((s, r) => s + (r.microsoft || 0), 0);
+  const adKosten = totMeta + totGoogle + totMicrosoft;
+  const roas = adKosten > 0 ? productie / adKosten : null;
+
+  const banden = productieFee(productie, config.productieBanden);
+  const rBand = roas != null ? roasFactor(roas, config.roasBanden) : null;
+  const rFactor = rBand ? rBand.factor : 1; // geen ad-data -> geen ROAS-correctie
+  const fee = banden.fee * rFactor;
+
+  const dim = dagenInMaand(maandISO);
+  const rijenMetData = monthRows.filter(r => (r.productie || 0) > 0 || (r.meta || 0) > 0 || (r.google || 0) > 0 || (r.microsoft || 0) > 0);
+  const dagen = rijenMetData.length;
+  const dagenVerstreken = dagen ? Number(rijenMetData[dagen - 1].datum.slice(8, 10)) : 0;
+  const projProductie = dagenVerstreken > 0 ? productie / dagenVerstreken * dim : 0;
+  const projBanden = productieFee(projProductie, config.productieBanden);
+  const feeVerwacht = projBanden.fee * rFactor; // ROAS schaalt lineair -> zelfde factor
+
+  return {
+    productie, adKosten, totMeta, totGoogle, totMicrosoft, roas,
+    feeRaw: banden.fee, perBand: banden.perBand, roasBand: rBand, roasFactor: rFactor, fee,
+    projProductie, feeVerwacht,
+    dagen, dagenVerstreken, dagenInMaand: dim,
+    eerste: dagen ? rijenMetData[0].datum : (monthRows.length ? monthRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (monthRows.length ? monthRows[monthRows.length - 1].datum : null)
+  };
+}
+
 // ---------- Maanden ----------
 // Fee wordt per kalendermaand berekend. Rijen blijven in één sheet staan;
 // hieronder filteren/kiezen we de juiste maand.

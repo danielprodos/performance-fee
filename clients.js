@@ -132,5 +132,25 @@ const CLIENTS = [
       { maxCPL: 500,      mod: 0.75, label: '€350–€500' },
       { maxCPL: Infinity, mod: 0.50, label: '> €500' }
     ]
+  },
+  {
+    // Fee over productie-banden × ROAS-factor. ROAS = productie ÷ ad-kosten.
+    id: 'kredietgroepnl',
+    naam: 'Krediet Groep Nederland',
+    dashboard: 'dashboards/kredietgroepnl.html',
+    type: 'production',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    // Fee over productie: 0,30% over €1,2M–€2,0M, 0,20% boven €2,0M (0% eronder).
+    productieBanden: [
+      { van: 1200000, tot: 2000000, rate: 0.003 },
+      { van: 2000000, tot: Infinity, rate: 0.002 }
+    ],
+    // ROAS-factor op de fee (logische lezing; pas aan als de afspraak anders is).
+    // Volgorde hoog -> laag; eerste waar roas >= minRoas wint.
+    roasBanden: [
+      { minRoas: 109, factor: 1.0 },  // ≥109 -> 100%
+      { minRoas: 100, factor: 0.5 },  // 100–109 -> 50%
+      { minRoas: 0,   factor: 0.0 }   // <100 -> 0%
+    ]
   }
 ];
