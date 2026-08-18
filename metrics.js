@@ -19,13 +19,14 @@ function normHeader(s) {
   return String(s == null ? '' : s).replace(/^﻿/, '').trim().toLowerCase();
 }
 
-// Een dagrij telt pas mee als álle datakolommen (kolommen met een naam) gevuld
-// zijn. Zo wordt een dag met bv. wél ad-kosten maar (nog) geen omzet overgeslagen
-// tot alles binnen is. Een expliciete 0 geldt als ingevuld; alleen leeg telt niet.
-function rijCompleet(cols, header, kolomDatum) {
-  for (let j = 0; j < header.length; j++) {
-    if (j === kolomDatum) continue;
-    if (header[j] === '') continue; // negeer lege/trailing kolommen
+// Een dagrij telt pas mee als álle relevante datakolommen (die deze klant
+// gebruikt) gevuld zijn. Zo wordt een dag met bv. wél ad-kosten maar (nog) geen
+// omzet overgeslagen tot alles binnen is. Een expliciete 0 geldt als ingevuld;
+// alleen leeg telt niet. `indices` bevat de te controleren kolomindexen (−1 = niet
+// aanwezig, wordt genegeerd) — hulptabellen naast de data blijven dus buiten schot.
+function rijCompleet(cols, indices) {
+  for (const j of indices) {
+    if (j == null || j < 0) continue;
     if (String(cols[j] == null ? '' : cols[j]).trim() === '') return false;
   }
   return true;
@@ -94,7 +95,7 @@ function parseSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue; // sla instructie-/lege regels over
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iMeta, iGoogle, iMicrosoft, iLocale, iNetto])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       meta: parseBedrag(cols[iMeta]),
@@ -178,7 +179,7 @@ function parseCmsSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iCms, iMeta, iGoogle, iMicrosoft])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       cmsInclBtw: parseBedrag(cols[iCms]),
@@ -280,7 +281,7 @@ function parseUnitSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iUnits, iMeta, iGoogle, iMicrosoft])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       units: iUnits === -1 ? 0 : Math.round(parseBedrag(cols[iUnits])),
@@ -345,7 +346,7 @@ function parseBaselineSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iOmzet, iMeta, iGoogle, iMicrosoft])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       omzet: iOmzet === -1 ? 0 : parseBedrag(cols[iOmzet]),
@@ -430,7 +431,7 @@ function parseLeadSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iLeads, iMeta, iGoogle, iMicrosoft])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       leads: iLeads === -1 ? 0 : Math.round(parseBedrag(cols[iLeads])),
@@ -520,7 +521,7 @@ function parseDealsSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iNew, iRevived, iLeads, iMeta, iGoogle, iMicrosoft])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       newDeals: iNew === -1 ? 0 : Math.round(parseBedrag(cols[iNew])),
@@ -627,7 +628,7 @@ function parseProductionSheet(text, config) {
     const cols = splitCsvLine(lines[i]);
     const datum = parseDatum(cols[kolomDatum]);
     if (!datum) continue;
-    if (!rijCompleet(cols, header, kolomDatum)) continue; // alleen volledig gevulde dagen
+    if (!rijCompleet(cols, [iProd, iMeta, iGoogle, iMicrosoft])) continue; // alleen volledig gevulde dagen
     rows.push({
       datum,
       productie: iProd === -1 ? 0 : parseBedrag(cols[iProd]),
