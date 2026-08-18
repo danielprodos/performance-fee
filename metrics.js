@@ -710,3 +710,30 @@ function maandLabel(maandISO) {
   const s = new Date(y, m - 1, 1).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
   return s.charAt(0).toUpperCase() + s.slice(1); // "Augustus 2026"
 }
+
+// ---------- Knop naar de gekoppelde CSV ----------
+// Voegt op elk klant-dashboard (waar een CONFIG met csvUrl bestaat) een knop toe
+// naar de gekoppelde CSV/sheet. Draait niet op het overzicht (geen CONFIG).
+function injectSheetKnop() {
+  if (typeof CONFIG === 'undefined' || !CONFIG || !CONFIG.csvUrl) return;
+  const controls = document.querySelector('.controls');
+  if (!controls || document.getElementById('sheetKnop')) return;
+  const a = document.createElement('a');
+  a.id = 'sheetKnop';
+  a.href = CONFIG.csvUrl;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.textContent = 'CSV ↗';
+  a.title = 'Open de gekoppelde CSV van deze klant';
+  a.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none;' +
+    'background:var(--card);color:var(--text);border:1px solid var(--border);' +
+    'border-radius:10px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;' +
+    'box-shadow:var(--shadow);cursor:pointer;';
+  a.addEventListener('mouseenter', () => { a.style.color = 'var(--accent)'; a.style.borderColor = 'var(--accent)'; });
+  a.addEventListener('mouseleave', () => { a.style.color = 'var(--text)'; a.style.borderColor = 'var(--border)'; });
+  controls.insertBefore(a, controls.firstChild);
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectSheetKnop);
+  else injectSheetKnop();
+}
