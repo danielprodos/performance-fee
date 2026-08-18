@@ -84,7 +84,14 @@ function parseSheet(text, config) {
   const iGoogle = idx(KOLOMMEN.google);
   const iMicrosoft = idx(KOLOMMEN.microsoft);
   const iLocale = idx(KOLOMMEN.locale);
-  const iNetto = idx(KOLOMMEN.netto);
+  // Netto/omzet-kolom op trefwoord herkennen, zodat de titel "(ex btw)" of
+  // "incl BTW" mag zijn zonder dat het dashboard omvalt. De echte datatabel
+  // staat links, dus de eerste 'inkomsten'-kolom is de juiste (een hulptabel
+  // ernaast met dezelfde naam wordt zo niet per ongeluk gepakt).
+  // LET OP: dit raakt alleen de kolomherkenning, niet de btw-berekening.
+  let iNetto = header.findIndex(h => h.includes('inkomsten'));
+  if (iNetto === -1) iNetto = idx(KOLOMMEN.netto);
+  if (iNetto === -1) iNetto = header.findIndex(h => h.includes('netto') || h.includes('omzet'));
   const heeftLocaleKolom = iLocale !== -1;
   const heeftMicrosoftKolom = iMicrosoft !== -1;
   const kolomDatum = iDatum === -1 ? 0 : iDatum; // fallback: eerste kolom
