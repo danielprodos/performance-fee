@@ -720,11 +720,13 @@ function injectSheetKnop() {
   if (!controls || document.getElementById('sheetKnop')) return;
   const a = document.createElement('a');
   a.id = 'sheetKnop';
-  a.href = CONFIG.csvUrl;
+  // De pub?output=csv-link dwingt een download af; de pubhtml-variant opent de
+  // gepubliceerde sheet als weergave-pagina in een nieuw tabblad.
+  a.href = CONFIG.csvUrl.replace(/pub\?output=csv\b.*/i, 'pubhtml');
   a.target = '_blank';
   a.rel = 'noopener';
-  a.textContent = 'CSV ↗';
-  a.title = 'Open de gekoppelde CSV van deze klant';
+  a.textContent = 'Sheet ↗';
+  a.title = 'Open de gekoppelde sheet van deze klant in een nieuw tabblad';
   a.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none;' +
     'background:var(--card);color:var(--text);border:1px solid var(--border);' +
     'border-radius:10px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;' +
