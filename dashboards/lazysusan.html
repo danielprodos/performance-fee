@@ -62,10 +62,9 @@
   header .client-tag a { color: inherit; text-decoration: none; }
   header .client-tag a:hover { color: var(--accent); }
 
-  .kpis { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-  @media (max-width: 1000px) { .kpis { grid-template-columns: 1fr 1fr 1fr; } }
-  @media (max-width: 680px) { .kpis { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 460px) { .kpis { grid-template-columns: 1fr; } }
+  .kpis { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
   .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
@@ -162,11 +161,6 @@
         <div class="value" id="feeValue">—</div>
         <div class="sub" id="feeSub">—</div>
       </div>
-      <div class="card kpi">
-        <div class="label">Verwachte fee (kwartaal)</div>
-        <div class="value" id="feeVerwValue">—</div>
-        <div class="sub" id="feeVerwSub">—</div>
-      </div>
     </div>
 
     <div class="card banden">
@@ -261,11 +255,6 @@ function render(qRows, kwartaalISO) {
   document.getElementById('feeValue').textContent = fmtEuro(m.fee);
   document.getElementById('feeSub').textContent =
     `${fmtPct(m.rate * 100)} × ${fmtGbp(m.bovenDrempel)} boven drempel = ${fmtGbp(m.feeGBP)} × ${m.koers}`;
-
-  document.getElementById('feeVerwValue').textContent = fmtEuro(m.feeVerwacht);
-  document.getElementById('feeVerwSub').textContent = m.projPct != null
-    ? `Projectie ${fmtPct(m.projPct * 100)} van target (pace)`
-    : 'Geen target';
 
   renderBanden(m);
   renderOmzetChart(qRows, m);
