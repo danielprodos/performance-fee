@@ -340,7 +340,7 @@ function parseBaselineSheet(text, config) {
   const iMeta = header.findIndex(h => h.includes('meta'));
   const iGoogle = header.findIndex(h => h.includes('google'));
   const iMicrosoft = header.findIndex(h => h.includes('microsoft'));
-  let iOmzet = header.findIndex(h => h.includes('omzet') || h.includes('revenue') || h.includes('turnover'));
+  let iOmzet = header.findIndex(h => h.includes('omzet') || h.includes('revenue') || h.includes('turnover') || h.includes('sales'));
   if (iOmzet === -1) {
     for (let j = 0; j < header.length; j++) {
       if (j !== kolomDatum && j !== iMeta && j !== iGoogle && j !== iMicrosoft && header[j] !== '') { iOmzet = j; break; }

@@ -161,8 +161,8 @@ const CLIENTS = [
     naam: 'Lazy Susan',
     dashboard: 'dashboards/lazysusan.html',
     type: 'quarterly',
-    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
-    btwTarief: 0.20,               // omzet bruto incl 20% btw -> netto = ÷1,20
+    csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsfTy9j_brFLUcRYlcGtwGLSKnPLCZyE9t7x7MPZLIKdryw1S1y6m4t6YLCwmys2ZwFEVyblNdgiSq/pub?output=csv',
+    btwTarief: 0,                  // sheet-kolom "Net Sales" is al netto -> geen btw-correctie
     // Kwartaaltargets (NETTO £) per kwartaal-van-het-jaar, uit de deal-tabel 2026.
     kwartaalTargets: {
       1: 1237825.87, // Q1

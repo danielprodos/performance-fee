@@ -249,7 +249,9 @@ function render(qRows, kwartaalISO) {
   }
 
   document.getElementById('omzetValue').textContent = fmtGbp(m.nettoOmzet);
-  document.getElementById('omzetSub').textContent = `Bruto ${fmtGbp(m.brutoOmzet)} incl. btw`;
+  document.getElementById('omzetSub').textContent = m.btw > 0
+    ? `Bruto ${fmtGbp(m.brutoOmzet)} incl. btw`
+    : 'Net Sales (reeds netto)';
 
   document.getElementById('targetValue').textContent = m.target != null ? fmtGbp(m.target) : '—';
   document.getElementById('targetSub').textContent = m.target != null
