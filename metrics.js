@@ -758,7 +758,12 @@ function dagVanKwartaal(datumIso) {
 function computeLazyMetrics(qRows, kwartaalISO, config) {
   const btw = config && config.btwTarief != null ? config.btwTarief : 0.20;
   const koers = config && config.wisselkoers != null ? config.wisselkoers : 1;
-  const target = config && config.kwartaalTargetNetto != null ? config.kwartaalTargetNetto : null;
+  // Target: per kwartaal-van-het-jaar (1..4) uit config.kwartaalTargets, met een
+  // vaste kwartaalTargetNetto als fallback.
+  const qNr = Number(String(kwartaalISO).split('-Q')[1]);
+  let target = null;
+  if (config && config.kwartaalTargets && config.kwartaalTargets[qNr] != null) target = config.kwartaalTargets[qNr];
+  else if (config && config.kwartaalTargetNetto != null) target = config.kwartaalTargetNetto;
   const f = (config && config.fee) || {};
   const dStart = f.drempelStart != null ? f.drempelStart : 0.85;
   const dVol = f.drempelVol != null ? f.drempelVol : 1.00;
@@ -770,8 +775,9 @@ function computeLazyMetrics(qRows, kwartaalISO, config) {
 
   function rateVoor(pct) {
     if (pct == null) return 0;
-    if (pct > dVol) return rBoven;
-    if (pct >= dStart) return rTussen;
+    // Kleine tolerantie: exact 100% telt als "t/m 100%" (5%), niet als >100%.
+    if (pct > dVol + 1e-9) return rBoven;
+    if (pct >= dStart - 1e-9) return rTussen;
     return 0;
   }
   function feeVoor(netto) {

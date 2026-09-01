@@ -163,7 +163,13 @@ const CLIENTS = [
     type: 'quarterly',
     csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
     btwTarief: 0.20,               // omzet bruto incl 20% btw -> netto = ÷1,20
-    kwartaalTargetNetto: 1666666.67, // jaar £6.666.667 netto (= £8M bruto) ÷ 4
+    // Kwartaaltargets (NETTO £) per kwartaal-van-het-jaar, uit de deal-tabel 2026.
+    kwartaalTargets: {
+      1: 1237825.87, // Q1
+      2: 3329864.24, // Q2
+      3: 1404913.59, // Q3
+      4: 285989.09   // Q4
+    },
     wisselkoers: 1.15,             // £ -> € voor de fee
     fee: { drempelStart: 0.85, drempelVol: 1.00, rateTussen: 0.05, rateBoven: 0.06 }
   }
