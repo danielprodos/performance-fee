@@ -193,6 +193,15 @@ async function laadKlant(client) {
       return { client, ok: true, maand, dagen: m.dagen, netto: m.productie, adKosten: m.adKosten, fee: m.fee };
     }
 
+    if (client.type === 'quarterly') {
+      const { rows } = parseBaselineSheet(text, client);
+      if (!rows.length) throw new Error('geen datarijen');
+      const q = kiesKwartaal(rows);
+      const m = computeLazyMetrics(filterKwartaal(rows, q), q, client);
+      // netto in €-equivalent (× koers) zodat de overzichtskolom uniform € is; ad-kosten n.v.t.
+      return { client, ok: true, periode: kwartaalLabel(q), dagen: m.dagen, netto: m.nettoOmzet * m.koers, adKosten: null, fee: m.fee };
+    }
+
     const { rows } = parseSheet(text, client);
     if (!rows.length) throw new Error('geen datarijen');
     const maand = kiesMaand(rows);
@@ -225,7 +234,9 @@ function render(results) {
     if (res.ok) {
       if (res.adKosten != null) sKosten += res.adKosten;
       sFee += res.fee;
-      const periode = res.maand ? `${maandLabel(res.maand)} · ${res.dagen} dagen` : '—';
+      const periode = res.periode
+        ? `${res.periode} · ${res.dagen} dagen`
+        : (res.maand ? `${maandLabel(res.maand)} · ${res.dagen} dagen` : '—');
       rechts = `
         <div class="naam-blok">
           <div class="naam">${c.naam}</div>

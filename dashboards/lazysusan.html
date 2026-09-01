@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lazy Susan — performance dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="../metrics.js"></script>
+<script src="../clients.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); --accent: #2563eb;
+    --green: #16a34a; --green-bg: #dcfce7; --orange: #ea580c; --orange-bg: #ffedd5;
+    --red: #dc2626; --red-bg: #fee2e2; --grid: rgba(0,0,0,0.06);
+    --prodos-blue: #234B96; --prodos-green: #2EE86F; --fee-accent: #234B96;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac; --border: #2a2e37;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6;
+      --green: #22c55e; --green-bg: #14321f; --orange: #fb923c; --orange-bg: #3a2410;
+      --red: #f87171; --red-bg: #3a1518; --grid: rgba(255,255,255,0.07); --fee-accent: #2EE86F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #1a1d23; --text: #e7e9ee; --muted: #9aa1ac; --border: #2a2e37;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4); --accent: #3b82f6;
+    --green: #22c55e; --green-bg: #14321f; --orange: #fb923c; --orange-bg: #3a2410;
+    --red: #f87171; --red-bg: #3a1518; --grid: rgba(255,255,255,0.07); --fee-accent: #2EE86F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+  header { margin-bottom: 24px; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; }
+  header .period { color: var(--muted); font-size: 14px; }
+  .theme-switch {
+    display: inline-flex; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; box-shadow: var(--shadow); flex-shrink: 0;
+  }
+  .theme-switch button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+    font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button.active { background: var(--accent); color: #fff; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .maand-select {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600;
+    box-shadow: var(--shadow); cursor: pointer;
+  }
+  header .client-tag {
+    display: inline-block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+  }
+  header .client-tag a { color: inherit; text-decoration: none; }
+  header .client-tag a:hover { color: var(--accent); }
+
+  .kpis { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 1000px) { .kpis { grid-template-columns: 1fr 1fr 1fr; } }
+  @media (max-width: 680px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 460px) { .kpis { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  .kpi .value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi .sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .big-card { display: flex; flex-direction: column; justify-content: center; border-width: 2px; }
+  .big-card .value { font-size: 40px; line-height: 1; margin: 4px 0; }
+  .big-card .status { font-size: 13px; font-weight: 600; margin-top: 8px; }
+  .st-green  { border-color: var(--green); background: var(--green-bg); }
+  .st-orange { border-color: var(--orange); background: var(--orange-bg); }
+  .st-red    { border-color: var(--red); background: var(--red-bg); }
+  .st-green .value, .st-green .status  { color: var(--green); }
+  .st-orange .value, .st-orange .status { color: var(--orange); }
+  .st-red .value, .st-red .status    { color: var(--red); }
+  .fee-accent .value { color: var(--fee-accent); }
+
+  .banden { margin-bottom: 20px; }
+  .banden h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .banden-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 560px) { .banden-row { grid-template-columns: 1fr; } }
+  .seg { border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; background: var(--card); position: relative; }
+  .seg .range { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .seg .fee { font-size: 20px; font-weight: 700; }
+  .seg .now { font-size: 12px; font-weight: 700; margin-top: 6px; display: none; }
+  .seg.active { border-width: 2px; }
+  .seg.active .now { display: block; }
+  .seg.active-green { border-color: var(--green); background: var(--green-bg); }
+  .seg.active-green .now { color: var(--green); }
+  .seg.active-orange { border-color: var(--orange); background: var(--orange-bg); }
+  .seg.active-orange .now { color: var(--orange); }
+  .seg.active-red { border-color: var(--red); background: var(--red-bg); }
+  .seg.active-red .now { color: var(--red); }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .chart-box { position: relative; height: 320px; }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  .banner {
+    padding: 16px 20px; border-radius: 12px; margin-bottom: 20px; font-size: 14px;
+    border: 1px solid #ea580c; background: rgba(234,88,12,0.08); color: #ea580c; display: none;
+  }
+  .banner.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===================== KLANT ===================== -->
+  <script>
+    const CONFIG = CLIENTS.find(c => c.id === 'lazysusan');
+  </script>
+  <!-- ================================================= -->
+
+  <header>
+    <div class="head-row">
+      <div>
+        <div class="client-tag"><a href="../index.html">← Prodos · consultant overzicht</a></div>
+        <h1 id="title">— performance dashboard</h1>
+        <div class="period" id="period">Data wordt geladen…</div>
+      </div>
+      <div class="controls">
+        <select id="maandSelect" class="maand-select" aria-label="Kwartaal kiezen"></select>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="Thema kiezen">
+          <button type="button" data-theme-choice="system">Systeem</button>
+          <button type="button" data-theme-choice="light">Licht</button>
+          <button type="button" data-theme-choice="dark">Donker</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div id="content" style="display:none;">
+    <div class="kpis">
+      <div class="card kpi big-card" id="pctCard">
+        <div class="label">Omzet t.o.v. kwartaaltarget</div>
+        <div class="value" id="pctValue">—</div>
+        <div class="status" id="pctStatus">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Omzet (netto)</div>
+        <div class="value" id="omzetValue">—</div>
+        <div class="sub" id="omzetSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Target (netto)</div>
+        <div class="value" id="targetValue">—</div>
+        <div class="sub" id="targetSub">—</div>
+      </div>
+      <div class="card kpi fee-accent">
+        <div class="label">Performance fee</div>
+        <div class="value" id="feeValue">—</div>
+        <div class="sub" id="feeSub">—</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Verwachte fee (kwartaal)</div>
+        <div class="value" id="feeVerwValue">—</div>
+        <div class="sub" id="feeVerwSub">—</div>
+      </div>
+    </div>
+
+    <div class="card banden">
+      <h2>Fee-staffel (omzet t.o.v. kwartaaltarget)</h2>
+      <div class="banden-row" id="bandenRow"></div>
+    </div>
+
+    <div class="charts">
+      <div class="card chart-card">
+        <h2>Cumulatieve omzet vs. target</h2>
+        <div class="chart-box"><canvas id="omzetChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Omzet per dag</h2>
+        <div class="chart-box"><canvas id="dailyChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const gbp = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'GBP' });
+const fmtGbp = (n) => gbp.format(n || 0);
+
+function toonFout(msg) {
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.classList.add('show');
+  document.getElementById('period').textContent = '';
+}
+
+let lastRender = null;
+
+function render(qRows, kwartaalISO) {
+  document.getElementById('title').textContent = `${CONFIG.naam} — performance dashboard`;
+  const banner = document.getElementById('banner');
+  banner.classList.remove('show');
+
+  if (!qRows || qRows.length === 0) {
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = kwartaalISO ? `Geen data voor ${kwartaalLabel(kwartaalISO)}.` : 'Geen geldige datarijen gevonden in de sheet.';
+    banner.classList.add('show');
+    document.getElementById('period').textContent = kwartaalISO ? kwartaalLabel(kwartaalISO) : '';
+    return;
+  }
+
+  const m = computeLazyMetrics(qRows, kwartaalISO, CONFIG);
+  if (m.dagen === 0) {
+    document.getElementById('content').style.display = 'none';
+    banner.textContent = `Nog geen data ingevuld voor ${kwartaalLabel(kwartaalISO)}.`;
+    banner.classList.add('show');
+    document.getElementById('period').textContent = kwartaalLabel(kwartaalISO);
+    return;
+  }
+
+  document.getElementById('content').style.display = 'block';
+  lastRender = { qRows, kwartaalISO, m };
+
+  document.getElementById('period').textContent =
+    `${kwartaalLabel(kwartaalISO)} · t/m ${fmtDatumNL(m.laatste)} · dag ${m.dagVerstreken}/${m.dagenInKwartaal}`;
+
+  const pctCard = document.getElementById('pctCard');
+  pctCard.classList.remove('st-green', 'st-orange', 'st-red');
+  const pct100 = m.pct != null ? m.pct * 100 : null;
+  document.getElementById('pctValue').textContent = pct100 != null ? fmtPct(pct100) : 'n.v.t.';
+  if (m.pct == null) {
+    document.getElementById('pctStatus').textContent = 'Geen target ingesteld';
+    pctCard.classList.add('st-orange');
+  } else if (m.pct > m.drempelVol) {
+    pctCard.classList.add('st-green');
+    document.getElementById('pctStatus').textContent = `Boven 100% — ${fmtPct(m.rateBoven * 100)} fee`;
+  } else if (m.pct >= m.drempelStart) {
+    pctCard.classList.add('st-orange');
+    document.getElementById('pctStatus').textContent = `85–100% — ${fmtPct(m.rateTussen * 100)} fee`;
+  } else {
+    pctCard.classList.add('st-red');
+    document.getElementById('pctStatus').textContent = `Onder ${fmtPct(m.drempelStart * 100)} — nog geen fee`;
+  }
+
+  document.getElementById('omzetValue').textContent = fmtGbp(m.nettoOmzet);
+  document.getElementById('omzetSub').textContent = `Bruto ${fmtGbp(m.brutoOmzet)} incl. btw`;
+
+  document.getElementById('targetValue').textContent = m.target != null ? fmtGbp(m.target) : '—';
+  document.getElementById('targetSub').textContent = m.target != null
+    ? `85%-grens ${fmtGbp(m.target * m.drempelStart)}`
+    : '';
+
+  document.getElementById('feeValue').textContent = fmtEuro(m.fee);
+  document.getElementById('feeSub').textContent =
+    `${fmtGbp(m.feeGBP)} × ${m.koers} · tarief ${fmtPct(m.rate * 100)}`;
+
+  document.getElementById('feeVerwValue').textContent = fmtEuro(m.feeVerwacht);
+  document.getElementById('feeVerwSub').textContent = m.projPct != null
+    ? `Projectie ${fmtPct(m.projPct * 100)} van target (pace)`
+    : 'Geen target';
+
+  renderBanden(m);
+  renderOmzetChart(qRows, m);
+  renderDailyChart(qRows, m);
+}
+
+function renderBanden(m) {
+  const row = document.getElementById('bandenRow');
+  const pct = m.pct;
+  const segs = [
+    { range: `< ${fmtPct(m.drempelStart * 100)}`, fee: '0%', actief: pct != null && pct < m.drempelStart, kl: 'active-red' },
+    { range: `${fmtPct(m.drempelStart * 100)}–${fmtPct(m.drempelVol * 100)}`, fee: fmtPct(m.rateTussen * 100), actief: pct != null && pct >= m.drempelStart && pct <= m.drempelVol, kl: 'active-orange' },
+    { range: `> ${fmtPct(m.drempelVol * 100)}`, fee: fmtPct(m.rateBoven * 100), actief: pct != null && pct > m.drempelVol, kl: 'active-green' }
+  ];
+  row.innerHTML = '';
+  segs.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'seg';
+    if (s.actief) { div.classList.add('active'); div.classList.add(s.kl); }
+    div.innerHTML = `
+      <div class="range">${s.range} van target</div>
+      <div class="fee">${s.fee}</div>
+      <div class="now">← nu</div>`;
+    row.appendChild(div);
+  });
+}
+
+let omzetChartObj = null, dailyChartObj = null;
+function withAlpha(hex, a) {
+  const h = hex.replace('#', '');
+  return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+function chartColors() {
+  const s = getComputedStyle(document.body);
+  return {
+    text: s.getPropertyValue('--text').trim() || '#1a1d21',
+    grid: s.getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.06)',
+    blue: s.getPropertyValue('--prodos-blue').trim() || '#234B96'
+  };
+}
+
+function renderOmzetChart(qRows, m) {
+  const c = chartColors();
+  const rows = qRows.filter(r => (r.omzet || 0) > 0);
+  let cum = 0;
+  const cumNetto = rows.map(r => { cum += r.omzet; return cum / (1 + m.btw); });
+  const labels = rows.map(r => fmtDatumNL(r.datum));
+  const datasets = [{
+    label: 'Cumulatieve omzet (netto)', data: cumNetto,
+    borderColor: c.blue, backgroundColor: withAlpha(c.blue, 0.12),
+    borderWidth: 2, tension: 0.2, fill: true, pointRadius: 2
+  }];
+  if (m.target != null) {
+    datasets.push({ label: 'Target', data: labels.map(() => m.target), borderColor: '#16a34a', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false });
+    datasets.push({ label: '85%-grens', data: labels.map(() => m.target * m.drempelStart), borderColor: '#ea580c', borderDash: [3, 4], borderWidth: 1, pointRadius: 0, fill: false });
+  }
+  if (omzetChartObj) omzetChartObj.destroy();
+  omzetChartObj = new Chart(document.getElementById('omzetChart'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtGbp(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, callback: (v) => gbp.format(v).replace(/,00$/, '') }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderDailyChart(qRows, m) {
+  const c = chartColors();
+  const rows = qRows.filter(r => (r.omzet || 0) > 0);
+  if (dailyChartObj) dailyChartObj.destroy();
+  dailyChartObj = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => fmtDatumNL(r.datum)),
+      datasets: [{ label: 'Omzet (netto)', data: rows.map(r => (r.omzet || 0) / (1 + m.btw)), backgroundColor: c.blue, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtGbp(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxRotation: 0, autoSkip: true }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, callback: (v) => gbp.format(v).replace(/,00$/, '') }, grid: { color: c.grid }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ---------- Data laden ----------
+let alleRijen = [];
+
+async function laadData() {
+  document.getElementById('footer').textContent = 'Laatst bijgewerkt: ' + new Date().toLocaleString('nl-NL');
+  if (!CONFIG.csvUrl) {
+    toonFout('Sheet nog niet gekoppeld — voeg de gepubliceerde CSV-link toe bij deze klant in clients.js.');
+    document.getElementById('maandSelect').style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch(CONFIG.csvUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    alleRijen = parseBaselineSheet(text, CONFIG).rows; // leest de omzet-kolom
+    vulKwartaalKiezer();
+  } catch (err) {
+    console.error(err);
+    toonFout('Kon de data niet ophalen — controleer of de sheet gepubliceerd is en de link klopt.');
+  }
+}
+
+function vulKwartaalKiezer() {
+  const sel = document.getElementById('maandSelect');
+  const kwartalen = beschikbareKwartalen(alleRijen);
+  if (!kwartalen.length) { render([], null); return; }
+  sel.innerHTML = kwartalen.slice().reverse().map(q => `<option value="${q}">${kwartaalLabel(q)}</option>`).join('');
+  const standaard = kiesKwartaal(alleRijen);
+  sel.value = standaard;
+  sel.onchange = () => toonKwartaal(sel.value);
+  toonKwartaal(standaard);
+}
+function toonKwartaal(kwartaalISO) { render(filterKwartaal(alleRijen, kwartaalISO), kwartaalISO); }
+
+// ---------- Thema-schakelaar ----------
+const THEME_KEY = 'prodos-theme';
+function redrawCharts() {
+  if (lastRender) { renderOmzetChart(lastRender.qRows, lastRender.m); renderDailyChart(lastRender.qRows, lastRender.m); }
+}
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'light' || choice === 'dark') root.setAttribute('data-theme', choice);
+  else root.removeAttribute('data-theme');
+  document.querySelectorAll('#themeSwitch button').forEach(b => b.classList.toggle('active', b.dataset.themeChoice === choice));
+  redrawCharts();
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  const choice = saved || 'system';
+  document.querySelectorAll('#themeSwitch button').forEach(b =>
+    b.addEventListener('click', () => {
+      const c = b.dataset.themeChoice;
+      try { localStorage.setItem(THEME_KEY, c); } catch (e) {}
+      applyTheme(c);
+    }));
+  applyTheme(choice);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!document.documentElement.hasAttribute('data-theme')) redrawCharts();
+  });
+})();
+
+laadData();
+</script>
+</body>
+</html>

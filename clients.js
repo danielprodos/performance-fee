@@ -152,5 +152,19 @@ const CLIENTS = [
       { minRoas: 100, factor: 0.5 },  // 100–109 -> 50%
       { minRoas: 0,   factor: 0.0 }   // <100 -> 0%
     ]
+  },
+  {
+    // Per-KWARTAAL fee op totale omzet t.o.v. kwartaaltarget (geen kanalen).
+    // Omzet wordt gelezen met parseBaselineSheet (omzet-kolom); berekend met
+    // computeLazyMetrics. Fee getrapt: <85% 0%, 85–100% 5%, >100% 6%.
+    id: 'lazysusan',
+    naam: 'Lazy Susan',
+    dashboard: 'dashboards/lazysusan.html',
+    type: 'quarterly',
+    csvUrl: '', // <-- vul de gepubliceerde CSV-link in zodra de sheet klaar is
+    btwTarief: 0.20,               // omzet bruto incl 20% btw -> netto = ÷1,20
+    kwartaalTargetNetto: 1666666.67, // jaar £6.666.667 netto (= £8M bruto) ÷ 4
+    wisselkoers: 1.15,             // £ -> € voor de fee
+    fee: { drempelStart: 0.85, drempelVol: 1.00, rateTussen: 0.05, rateBoven: 0.06 }
   }
 ];

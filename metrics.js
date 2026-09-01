@@ -706,6 +706,104 @@ function filterMaand(rows, maandISO) {
   return rows.filter(r => maandVan(r.datum) === maandISO);
 }
 
+// ---------- Kwartalen (Lazy Susan) ----------
+function kwartaalVan(datumIso) {
+  const [y, m] = String(datumIso).split('-').map(Number);
+  return `${y}-Q${Math.floor((m - 1) / 3) + 1}`;
+}
+function beschikbareKwartalen(rows) {
+  return [...new Set(rows.map(r => kwartaalVan(r.datum)))].sort();
+}
+function huidigKwartaalISO(nu) {
+  const d = nu || new Date();
+  return `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+}
+function kiesKwartaal(rows, gewenst) {
+  const ks = beschikbareKwartalen(rows);
+  if (!ks.length) return null;
+  const doel = gewenst || huidigKwartaalISO();
+  return ks.includes(doel) ? doel : ks[ks.length - 1];
+}
+function filterKwartaal(rows, kwartaalISO) {
+  if (!kwartaalISO) return rows.slice();
+  return rows.filter(r => kwartaalVan(r.datum) === kwartaalISO);
+}
+function kwartaalLabel(kwartaalISO) {
+  const [y, q] = kwartaalISO.split('-Q');
+  return `Q${q} ${y}`;
+}
+function dagenInKwartaal(kwartaalISO) {
+  const [y, q] = kwartaalISO.split('-Q').map(Number);
+  const startM = (q - 1) * 3; // 0-based eerste maand
+  let d = 0;
+  for (let mm = startM; mm < startM + 3; mm++) d += new Date(y, mm + 1, 0).getDate();
+  return d;
+}
+function dagVanKwartaal(datumIso) {
+  const [y, m, d] = datumIso.split('-').map(Number);
+  const startM = Math.floor((m - 1) / 3) * 3; // 0-based eerste maand van dit kwartaal
+  let offset = 0;
+  for (let mm = startM; mm < m - 1; mm++) offset += new Date(y, mm + 1, 0).getDate();
+  return offset + d;
+}
+
+/* Lazy Susan: per-kwartaal fee. Getrapt op doelbereik (netto-omzet ÷ kwartaaltarget):
+     < drempelStart (85%)       -> 0%
+     drempelStart–drempelVol    -> rateTussen (5%)
+     > drempelVol (100%)         -> rateBoven (6%)
+   Fee over de volledige netto-omzet, in £, daarna × wisselkoers -> €.
+   Omzet in de sheet is bruto incl. btw (÷(1+btwTarief) = netto). Pace-projectie
+   naar kwartaaleinde. Geen kanalen/ad-kosten.
+*/
+function computeLazyMetrics(qRows, kwartaalISO, config) {
+  const btw = config && config.btwTarief != null ? config.btwTarief : 0.20;
+  const koers = config && config.wisselkoers != null ? config.wisselkoers : 1;
+  const target = config && config.kwartaalTargetNetto != null ? config.kwartaalTargetNetto : null;
+  const f = (config && config.fee) || {};
+  const dStart = f.drempelStart != null ? f.drempelStart : 0.85;
+  const dVol = f.drempelVol != null ? f.drempelVol : 1.00;
+  const rTussen = f.rateTussen != null ? f.rateTussen : 0.05;
+  const rBoven = f.rateBoven != null ? f.rateBoven : 0.06;
+
+  const brutoOmzet = qRows.reduce((s, r) => s + (r.omzet || 0), 0);
+  const nettoOmzet = brutoOmzet / (1 + btw);
+
+  function rateVoor(pct) {
+    if (pct == null) return 0;
+    if (pct > dVol) return rBoven;
+    if (pct >= dStart) return rTussen;
+    return 0;
+  }
+  function feeVoor(netto) {
+    if (target == null) return null;
+    const pct = netto / target;
+    const rate = rateVoor(pct);
+    const feeGBP = rate * netto;
+    return { pct, rate, feeGBP, fee: feeGBP * koers };
+  }
+
+  const dim = dagenInKwartaal(kwartaalISO);
+  const rijenMetData = qRows.filter(r => (r.omzet || 0) > 0);
+  const dagen = rijenMetData.length;
+  const dagVerstreken = dagen ? dagVanKwartaal(rijenMetData[dagen - 1].datum) : 0;
+  const projBruto = dagVerstreken > 0 ? brutoOmzet / dagVerstreken * dim : 0;
+  const projNetto = projBruto / (1 + btw);
+
+  const nu = feeVoor(nettoOmzet);
+  const verwacht = feeVoor(projNetto);
+
+  return {
+    brutoOmzet, nettoOmzet, target, btw, koers,
+    pct: nu ? nu.pct : null, rate: nu ? nu.rate : 0,
+    feeGBP: nu ? nu.feeGBP : 0, fee: nu ? nu.fee : 0, // fee = € ; feeGBP = £
+    projNetto, projPct: verwacht ? verwacht.pct : null, feeVerwacht: verwacht ? verwacht.fee : 0,
+    drempelStart: dStart, drempelVol: dVol, rateTussen: rTussen, rateBoven: rBoven,
+    dagen, dagVerstreken, dagenInKwartaal: dim,
+    eerste: dagen ? rijenMetData[0].datum : (qRows.length ? qRows[0].datum : null),
+    laatste: dagen ? rijenMetData[dagen - 1].datum : (qRows.length ? qRows[qRows.length - 1].datum : null)
+  };
+}
+
 // ---------- Formatters (NL) ----------
 const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
 const pct1 = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
