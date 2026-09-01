@@ -260,7 +260,7 @@ function render(qRows, kwartaalISO) {
 
   document.getElementById('feeValue').textContent = fmtEuro(m.fee);
   document.getElementById('feeSub').textContent =
-    `${fmtGbp(m.feeGBP)} × ${m.koers} · tarief ${fmtPct(m.rate * 100)}`;
+    `${fmtPct(m.rate * 100)} × ${fmtGbp(m.bovenDrempel)} boven drempel = ${fmtGbp(m.feeGBP)} × ${m.koers}`;
 
   document.getElementById('feeVerwValue').textContent = fmtEuro(m.feeVerwacht);
   document.getElementById('feeVerwSub').textContent = m.projPct != null

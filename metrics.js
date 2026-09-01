@@ -784,8 +784,10 @@ function computeLazyMetrics(qRows, kwartaalISO, config) {
     if (target == null) return null;
     const pct = netto / target;
     const rate = rateVoor(pct);
-    const feeGBP = rate * netto;
-    return { pct, rate, feeGBP, fee: feeGBP * koers };
+    const drempelBedrag = dStart * target;                 // 85%-drempel
+    const bovenDrempel = Math.max(0, netto - drempelBedrag); // omzet boven de drempel
+    const feeGBP = rate * bovenDrempel;                    // tarief over het deel boven de drempel
+    return { pct, rate, drempelBedrag, bovenDrempel, feeGBP, fee: feeGBP * koers };
   }
 
   const dim = dagenInKwartaal(kwartaalISO);
@@ -801,6 +803,7 @@ function computeLazyMetrics(qRows, kwartaalISO, config) {
   return {
     brutoOmzet, nettoOmzet, target, btw, koers,
     pct: nu ? nu.pct : null, rate: nu ? nu.rate : 0,
+    drempelBedrag: nu ? nu.drempelBedrag : null, bovenDrempel: nu ? nu.bovenDrempel : 0,
     feeGBP: nu ? nu.feeGBP : 0, fee: nu ? nu.fee : 0, // fee = € ; feeGBP = £
     projNetto, projPct: verwacht ? verwacht.pct : null, feeVerwacht: verwacht ? verwacht.fee : 0,
     drempelStart: dStart, drempelVol: dVol, rateTussen: rTussen, rateBoven: rBoven,
